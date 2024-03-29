@@ -9,7 +9,7 @@ K = 4           # Number of Gaussians in the mixture model
 NUM_TRIALS = 3  # Number of trials to run (can be adjusted for debugging)
 UNLABELED = -1  # Cluster label for unlabeled data points (do not change)
 
-DEBUG = True
+DEBUG = False
 
 def dprint(*args):
     if DEBUG:
@@ -52,7 +52,6 @@ def main(is_semi_supervised, trial_num):
     covariances = []
     for idx, g in enumerate(groups):
         g = np.array(g)
-        print(idx)
         if len(g) == 0:
             cluster_means.append( np.empty(x.shape[1]))
             covariances.append( np.empty(x.shape[1]))
@@ -84,6 +83,7 @@ def main(is_semi_supervised, trial_num):
         w = run_em(x, w, phi, mu, sigma)
 
     # Plot your predictions
+    n = x.shape[0]
     z_pred = np.zeros(n)
     if w is not None:  # Just a placeholder for the starter code
         for i in range(n):
@@ -118,6 +118,9 @@ def run_em(x, w, phi, mu, sigma):
     it = 0
     ll = prev_ll = None
     while it < max_iter and (prev_ll is None or np.abs(ll - prev_ll) >= eps):
+        it +=1
+        prev_ll = ll
+        print("it:", it)
         # *** START CODE HERE
         # (1) E-step: Update your estimates in w
         # responsibility should be of shape of (n_examples, k)
@@ -130,33 +133,37 @@ def run_em(x, w, phi, mu, sigma):
                 w[i] /= sum_cluster_i
 
         e_step(x, w, phi, mu, sigma)
-#        dprint("new weight:", w)
+        dprint("new weight:", w)
 
         # (2) M-step: Update the model parameters phi, mu, and sigma
 
         def m_step(x, w, phi, mu, sigma):
-#            dprint("sigma shape:", sigma.shape)
+            dprint("sigma shape:", sigma.shape)
 
-            N = np.sum(w)
-#            dprint("N:", N)
+            N = x.shape[0]
+            dprint("N:", N)
 
             w_sum = np.sum(w, axis=0)
-#            dprint("w_sum:", w_sum)
+            dprint("w:", w.shape)
+            dprint("w_sum:", w_sum)
             phi = w_sum / N
-#            dprint("phi:", phi)
 
-#            dprint("before mu", mu, mu.shape)
+            dprint("phi:", phi)
+            dprint("before mu", mu, mu.shape)
+
             mu = w.T.dot(x)
-#            dprint("dot mu", mu, mu.shape)
+            dprint("dot mu", mu, mu.shape)
             for idx in range(len(mu)):
                 mu[idx] /= w_sum[idx]
-#            dprint("after mu", mu)
+            dprint("after mu", mu)
 
-#            dprint("x shape:", x.shape)
+            dprint("x shape:", x.shape)
+            dprint("before sigma", sigma)
             for k in range(K):
                 s = None
                 for i in range(x.shape[0]):
                     diff = np.array(x[i] - mu[k])[np.newaxis]
+#                    dprint("diff:", diff)
                     si = w[i][k] * diff.T.dot(diff)
                     if s is None:
                         s = si;
@@ -164,9 +171,9 @@ def run_em(x, w, phi, mu, sigma):
                         s += si;
                 sigma[k] = s / w_sum[k]
 
-#            dprint("sigma shape:", sigma.shape)
-
         m_step(x,w,phi,mu,sigma)
+        print("sigma:", sigma)
+        print("mu:", mu)
 
         ll = 0
         for i, xi in enumerate(x):
@@ -176,7 +183,8 @@ def run_em(x, w, phi, mu, sigma):
                 p+=prob
             ll += math.log(p)
 
-        print("ll:", ll)
+        if ll is not None and prev_ll is not None:
+            print("ll:", ll, "prev_ll:", prev_ll, ". diff:", (ll - prev_ll))
         # (3) Compute the log-likelihood of the data to check for convergence.
         # By log-likelihood, we mean `ll = sum_x[log(sum_z[p(x|z) * p(z)])]`.
         # We define convergence by the first iteration where abs(ll - prev_ll) < eps.
@@ -215,15 +223,93 @@ def run_semi_supervised_em(x, x_tilde, z_tilde, w, phi, mu, sigma):
     it = 0
     ll = prev_ll = None
     while it < max_iter and (prev_ll is None or np.abs(ll - prev_ll) >= eps):
-        pass  # Just a placeholder for the starter code
+        it += 1
+        prev_ll = ll
         # *** START CODE HERE ***
         # (1) E-step: Update your estimates in w
-
+        def e_step(x, w, phi, mu, sigma):
+            #r = np.empty((x.shape[0], K))
+            for i in range(len(w)):
+                for k in range(len(w[i])):
+                    w[i][k] = phi[k] * pdf(x[i], mu[k], sigma[k])
+                sum_cluster_i = np.sum(w[i])
+                w[i] /= sum_cluster_i
+        e_step(x, w, phi, mu, sigma)
         # (2) M-step: Update the model parameters phi, mu, and sigma
 
+        def m_step(x, x_tilde, z_tilde, w, phi, mu, sigma):
+            dprint("sigma shape:", sigma.shape)
+
+            w_sum = np.sum(w, axis=0)
+
+            mu_unsup = w.T.dot(x)
+            def one_hot(z):
+                a = z.astype(int)
+                res = np.zeros((a.size, a.max() +1))
+                res[np.arange(a.size), a] = 1
+                return res.astype(int)
+            dprint("z_t:", z_tilde.shape, z_tilde)
+            z_1hot = one_hot(z_tilde.T)
+            z_1hot_sum = alpha* np.sum(z_1hot, axis=0)
+            dprint("z_1hot:", z_1hot.shape, z_1hot)
+            # update phi:
+            dprint("w:", w.shape)
+            dprint("w_sum:", w_sum)
+            N = x.shape[0]
+            phi = (w_sum + z_1hot_sum)/ N
+            dprint("phi:", phi.shape, phi)
+
+            # update mu:
+            mu_sup = alpha * z_1hot.T.dot(x_tilde)
+            dprint("mu_sup:", mu_sup.shape, mu_sup)
+            dprint("mu_unsup:", mu_unsup.shape, mu_unsup)
+            mu = mu_unsup + mu_sup
+            for idx in range(len(mu)):
+                mu[idx] /= (w_sum[idx] + z_1hot_sum[idx])
+
+            dprint("mu:", mu.shape, mu)
+
+            # update sigma
+            for k in range(K):
+                s = None
+                for i in range(x.shape[0]):
+                    diff = np.array(x[i] - mu[k])[np.newaxis]
+#                    dprint("diff:", diff)
+                    si = w[i][k] * diff.T.dot(diff)
+                    if s is None:
+                        s = si;
+                    else:
+                        s += si;
+                for i in range(x_tilde.shape[0]):
+                    if z_1hot[i][k] != 0:
+                        diff_tilde = np.array(x_tilde[i] - mu[k])[np.newaxis]
+                        s += diff_tilde.T.dot(diff_tilde)
+
+                sigma[k] = s / (w_sum[k] + z_1hot_sum[k])
+            dprint("sigma shape:", sigma.shape)
+
+        m_step(x, x_tilde, z_tilde, w,phi,mu,sigma)
+        print("sigma:", sigma)
+        print("mu:", mu)
         # (3) Compute the log-likelihood of the data to check for convergence.
         # Hint: Make sure to include alpha in your calculation of ll.
         # Hint: For debugging, recall part (a). We showed that ll should be monotonically increasing.
+        ll = 0
+        for i, xi in enumerate(x):
+            p = 0
+            for k in range(K):
+                prob = pdf(xi, mu[k], sigma[k]) * w[i][k] * phi[k]
+                p+=prob
+            ll += math.log(p)
+
+
+        for i, xi in enumerate(x_tilde):
+            k = z_tilde.T.squeeze().astype(int)[i]
+            p_sup = pdf(xi, mu[k], sigma[k])
+            ll += alpha * math.log(p_sup)
+        if ll is not None and prev_ll is not None:
+            print("ll:", ll, "prev_ll:", prev_ll, ". diff:", (ll - prev_ll))
+
         # *** END CODE HERE ***
 
     return w
@@ -294,6 +380,6 @@ if __name__ == '__main__':
         # uncomment the following line.
         # You do not need to add any other lines in this code block.
 
-        # main(is_semi_supervised=True, trial_num=t)
+        main(is_semi_supervised=True, trial_num=t)
 
         # *** END CODE HERE ***

@@ -120,9 +120,11 @@ import matplotlib.pyplot as plt
 
 ROTATE_ALONG_X_AXIS=np.array([[1, 0 ],
                               [0, -1]])
-def load_hand_data(pq_path):
+def load_hand_data(pq_path, replace_nan=True):
     dprint(pq_path)
-    data = pd.read_parquet(pq_path, columns=ALL_DATA_COLUMNS).replace(np.nan, 0)
+    data = pd.read_parquet(pq_path, columns=ALL_DATA_COLUMNS)
+    if replace_nan:
+        data = data.replace(np.nan, 0)
 #    dprint(data)
     # remove all landmarks that are not hand related
     data = data[data['type'].isin(['left_hand', 'right_hand'])]
@@ -181,11 +183,19 @@ def show(hand_data):
   show_1_hand(hand_data.left_hand, 'b.')
   show_1_hand(hand_data.right_hand, 'r.')
 
-def show_hands(hands_data, path= 'temp.png'):
-    figure = plt.figure(figsize=(8, 8))
+def show_hands(hands_data, path= 'temp.png', flat_col = None):
+    if flat_col is not None:
+        figure = plt.figure(figsize=(flat_col*2, 2))
+    else:
+        figure = plt.figure(figsize=(8, 8))
     i = 1
-    cols, rows = 3, len(hands_data) // 3 + 1
+    if flat_col is not None:
+        cols, rows = flat_col, 1
+    else:
+        cols, rows = 3, len(hands_data) // 3 + 1
     for hand in hands_data:
+        if flat_col is not None and i > flat_col:
+            break;
         figure.add_subplot(rows, cols, i)
         show(hand)
         i+= 1
@@ -253,12 +263,20 @@ def load_csv(csv_path, signs = load_trimmed_signs()):
 print(load_csv(TRAINING_DATA))
 #print(load_csv(PROCESSED_DATA))
 train = load_csv(TRAINING_DATA)
+apple = train.loc[train['sign'].isin(["apple"])]
+print(apple)
 #landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/25571/1000210073.parquet"))) # sign for "bird"
 #    landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/28656/1000106739.parquet"))) # sign for "wait"
-landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/26734/1000035562.parquet")))  # sign language for "blow"
-hands = parse_to_data(landmark)
-# show_hands(hands)
+# landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/26734/1000035562.parquet")))  # sign language for "blow"
+#landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/62590/1002885072.parquet")))  # sign language for "alligator"
+landmark = load_hand_data(str(DATA_PATH.joinpath("train_landmark_files/36257/1000536928.parquet")), False)  # sign language for "apple"
 
+hands = parse_to_data(landmark)
+#show_hands(hands, path="apple.png", flat_col = 9)
+
+apple_path = "train_landmark_files/27610/1016231410.parquet"
+show_hands(parse_to_data(load_hand_data(str(DATA_PATH.joinpath(apple_path)), False)), path="apple2.png", flat_col = 12)
+exit()
 #print(load_sign())
 
 
@@ -984,7 +1002,35 @@ class LSTMASL(BaseNeuralNetwork):
         self.input_size = ROWS_FOR_HAND * 2 # each hand point has x and y coordinate
         self.output_size = output
         self.hidden_size = 300
-        self.lstm = nn.LSTM(self.input_size, self.hidden_size, dropout = 0.2)
+        self.i_size = 300
+        self.f_size = 300
+        self.o_size = 300
+        self.g_size = 300
+        self.c_size = 300
+
+        self.ix = nn.LazyLinear(self.i_size)
+        self.ih = nn.LazyLinear(self.i_size, bias=False)
+        self.i_act = nn.Sigmoid()
+
+        self.fx = nn.LazyLinear(self.f_size)
+        self.fh = nn.LazyLinear(self.f_size, bias=False)
+        self.f_act = nn.Sigmoid()
+
+        self.ox = nn.LazyLinear(self.o_size)
+        self.oh = nn.LazyLinear(self.o_size, bias=False)
+        self.o_act = nn.Sigmoid()
+
+        self.gx = nn.LazyLinear(self.g_size)
+        self.gh = nn.LazyLinear(self.g_size, bias=False)
+        self.g_act = nn.Tanh()
+
+        self.h_act = nn.Tanh()
+
+        self.h2o  = nn.Sequential(
+            nn.LazyLinear( self.hidden_size, dtype=torch.float32),
+            nn.Dropout(p=0.2),
+#            nn.ReLU()
+        )
         self.layer2 = nn.Sequential(
             # Use kernel_size = 2 to group the (x,y) corrdinates together
             nn.ReLU(),
@@ -995,13 +1041,24 @@ class LSTMASL(BaseNeuralNetwork):
         # X:torch.Size([105, 6, 84])
         frame_count, batch_size, row_for_hand = hand_data.shape
         fprint("input:", hand_data.shape)
-        output, (hn, cn) = self.lstm(hand_data)
 
+        h = torch.zeros((batch_size, self.hidden_size))
+        ct = torch.zeros((batch_size, self.hidden_size))
+        for i in range(frame_count):
+            x = hand_data[i]
+            it = self.i_act(self.ix(x) + self.ih(h))
+            ft = self.f_act(self.fx(x) + self.fh(h))
+            ot = self.o_act(self.ox(x) + self.oh(h))
+            gt = self.g_act(self.gx(x) + self.gh(h))
+            ct = ft * ct + it * gt
+            h = ot * self.h_act(ct)
+            fprint(h)
+        output = self.h2o(h)
         fprint("output", output.shape, output)
         # many to 1, so just need the last frame
-        output = output[-1]
-        fprint("last", output.shape, output)
-        output = self.layer2(output)
+#        output = output[-1]
+ #       fprint("last", output.shape, output)
+#        output = self.layer2(output)
         fprint("final", output.shape)
         return output, torch.zeros(1)
 
@@ -1247,7 +1304,7 @@ models = { "asl_model_trimmed":  asl_model,
 
 # In[ ]:
 
-epoch = 100
+epoch = 150
 os.environ["DEBUG"] = "False"
 train_debug = None;
 lr = 5
@@ -1266,13 +1323,13 @@ load_train_test(models, "lstm", train_dataloader, test_dataloader,
 #                epoch, train_debug)
 #load_train_test(models, "basic_rnn2", train_dataloader, test_dataloader,
 #                epoch, train_debug)
-exit()
-load_train_test(models, "joint_rnn_trimmed", train_dataloader, test_dataloader,
-                epoch, train_debug)
 
-load_train_test(models, "basic_rnn_model_trimmed", train_dataloader, test_dataloader, epoch, train_debug)
+#load_train_test(models, "joint_rnn_trimmed", train_dataloader, test_dataloader,
+#                epoch, train_debug)
 
-load_train_test(models, "asl_model_trimmed", train_dataloader, test_dataloader, epoch, train_debug)
+#load_train_test(models, "basic_rnn_model_trimmed", train_dataloader, test_dataloader, epoch, train_debug)
+
+#load_train_test(models, "asl_model_trimmed", train_dataloader, test_dataloader, epoch, train_debug)
 
 #load_model("asl_model_trimmed", models)
 

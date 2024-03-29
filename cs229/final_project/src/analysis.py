@@ -249,6 +249,7 @@ hands = parse_to_data(landmark)
 
 def showFrameNum(csv, sign, pick_same_person = False):
     data = csv.loc[csv['sign'].isin([sign])]
+    print("len for {sign}", len(data))
     file_name = sign +"_frame_count.png"
     title = "'{}' signed by different people".format(sign)
     if pick_same_person:
@@ -285,7 +286,8 @@ def showFrameNum(csv, sign, pick_same_person = False):
 
 
 #showFrameNum(train, 'TV')
-#showFrameNum(train, 'TV', True)
+#showFrameNum(train, 'after')
+#showFrameNum(train, 'all')
 
 
 def plotLR(stats_name, const_lr_name):
@@ -333,8 +335,197 @@ def plotTraining(stats_name):
     ax.legend(["Train Loss", "Test Loss"])
     second_ax.legend(["Train Accuracy", "Test Accuracy"])
 #    plt.show()
-    plt.savefig(OUTPUT_PATH.joinpath("training_test_loss"))
+    plt.savefig(OUTPUT_PATH.joinpath(stats_name+"_training_test_loss"))
     plt.close()
     return
 
 plotTraining("lstm_batch_10")
+plotTraining('asl_model_trimmed')
+
+def avgEpochTime(a):
+    print(a,          ":",  pd.read_csv(OUTPUT_PATH.joinpath(a +"_training_summary.csv"))[["training epoch time"]].mean())
+
+
+
+avgEpochTime("lstm_batch_10")
+avgEpochTime("lstm_batch100")
+avgEpochTime("lstm_full_data_set")
+
+
+import torch
+from torcheval.metrics import MulticlassAUROC
+from working_copy import device
+from working_copy import load_trimmed_signs
+
+def plotAUC(model, test):
+    metric = MulticlassAUROC(num_classes=10, average = None)
+    preds = None
+    ys = []
+    loss_fn = nn.CrossEntropyLoss()
+    with torch.no_grad():
+        for batch in test:
+            X, Y = [], []
+            for item in batch:
+                x, y = item
+                X.append(x)
+                Y.append(y)
+
+            # this results in a shape (batch, frame count, landmarks)
+            X = torch.stack(X)
+            fprint("X init shape:", X.shape)
+
+            # transform X into a shape (frame count, batch, landmarks)
+            X = torch.swapaxes(X, 0, 1)
+            fprint("X transformed shape:", X.shape)
+            Y = torch.tensor(np.array(Y))
+
+            hidden = model.init_zero_hidden(len(Y))
+            # send tensors to device
+            X, Y, hidden = X.to(device), Y.to(device), hidden.to(device)
+
+            pred, hidden = model(X, hidden)
+
+            if preds == None:
+                preds = pred
+            else:
+                preds = torch.cat((preds, pred), 0)
+            ys += Y.tolist()
+    print(preds)
+    print(ys)
+#    preds = torch.tensor(preds)
+    ys = torch.tensor(ys)
+    #ys =
+    print(preds.shape)
+    print(ys.shape)
+    metric.update(preds, ys)
+    print("compute:", metric.compute())
+
+
+    # from https://www.geeksforgeeks.org/multiclass-receiver-operating-characteristic-roc-in-scikit-learn/
+    from sklearn.metrics import roc_curve, auc, RocCurveDisplay
+    from itertools import cycle
+
+    n_classes = 10
+    fig, ax = plt.subplots(figsize=(10, 10))
+    target_names = list(load_trimmed_signs().keys())
+    print(target_names)
+    colors = cycle(["aqua", "darkorange", "cornflowerblue", "tan", "lightcoral", \
+                    "plum", "slategrey", "limegreen", "rosybrown", "khaki"])
+    preds = torch.Tensor.numpy(preds)
+    one_hot = torch.Tensor.numpy(torch.nn.functional.one_hot(torch.tensor(ys), num_classes = 10))
+
+    for class_id, color in zip(range(n_classes), colors):
+        RocCurveDisplay.from_predictions(
+            one_hot[:, class_id],
+            preds[:, class_id],
+            name=f"ROC curve for \"{target_names[class_id]}\"",
+            color=color,
+            ax=ax,
+    )
+    plt.savefig(OUTPUT_PATH.joinpath("LSTM OvR ROC Curve"))
+    plt.show()
+    plt.close()
+
+
+
+from working_copy import LSTMASL
+from working_copy import test_dataloader
+
+lstm = LSTMASL()
+lstm.load_state_dict(torch.load(MODEL_OUTPUT_PATH.joinpath("lstm")))
+
+#plotAUC(lstm, test_dataloader)
+
+
+def showVideoDistributions(csv):
+    file_name ="training_data_count_distribution.png"
+    title = "training data distribution"
+
+    frame_sizes_map = []
+    signs = list(load_trimmed_signs().keys())
+    for sign in signs:
+        data = csv.loc[csv['sign'].isin([sign])]
+        frame_sizes_map.append(len(data))
+
+    figure = plt.figure()
+        # creating the bar plot
+    plt.bar(signs, frame_sizes_map, color ='maroon',
+                width = 0.4)
+
+    plt.xlabel("Sign")
+    plt.ylabel("Total Training Videos per Sign")
+    plt.title(title)
+    plt.savefig(OUTPUT_PATH.joinpath(file_name))
+    plt.show()
+    plt.close()
+
+showVideoDistributions(train)
+
+def showVideoVariance(csv):
+    file_name ="frame_variance.png"
+    title = "frame variance distribution"
+
+    frame_var  = []
+    signs = list(load_trimmed_signs().keys())
+    import statistics
+
+    for sign in signs:
+        data = csv.loc[csv['sign'].isin([sign])]
+        frame_sizes = []
+        for index, row in data.iterrows():
+            pq_path = row['path']
+            landmark_pd = pd.read_parquet(DATA_PATH.joinpath(pq_path),)# columns=['frame'])
+            frames = landmark_pd.frame.unique()
+            #        print(frames)
+            #        print(len(frames))
+            frame_sizes.append(len(frames))
+        variance = statistics.variance(frame_sizes)
+        frame_var.append(variance)
+
+    figure = plt.figure()
+        # creating the bar plot
+    plt.bar(signs, frame_var, color ='maroon',
+                width = 0.4)
+
+    plt.xlabel("Sign")
+    plt.ylabel("Frame Count Variance per video per Sign")
+    plt.title(title)
+    plt.savefig(OUTPUT_PATH.joinpath(file_name))
+    plt.show()
+    plt.close()
+
+# showVideoVariance(train)
+
+def showFrameTotal(csv):
+    file_name ="frame_total.png"
+    title = "Total Frame Count"
+
+    frame_var  = []
+    signs = list(load_trimmed_signs().keys())
+    import statistics
+
+    for sign in signs:
+        data = csv.loc[csv['sign'].isin([sign])]
+        s = 0
+        for index, row in data.iterrows():
+            pq_path = row['path']
+            landmark_pd = pd.read_parquet(DATA_PATH.joinpath(pq_path),)# columns=['frame'])
+            frames = landmark_pd.frame.unique()
+            #        print(frames)
+            #        print(len(frames))
+            s += len(frames)
+        frame_var.append(s)
+
+    figure = plt.figure()
+        # creating the bar plot
+    plt.bar(signs, frame_var, color ='maroon',
+                width = 0.4)
+
+    plt.xlabel("Sign")
+    plt.ylabel("Total Frame Count per Sign")
+    plt.title(title)
+    plt.savefig(OUTPUT_PATH.joinpath(file_name))
+    plt.show()
+    plt.close()
+
+showFrameTotal(train)
