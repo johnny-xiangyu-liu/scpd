@@ -1,4 +1,10 @@
-**/**/.DS_Store
+**/.DS_Store
+
+**/data/
+
+# Emacs backup files and autosaved files
+*~
+\#*#
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

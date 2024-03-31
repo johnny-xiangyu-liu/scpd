@@ -1,0 +1,275 @@
+\documentclass[12pt]{article}
+\usepackage{fullpage,enumitem,amsmath,amssymb,graphicx}
+\usepackage{soul}
+
+\begin{document}
+
+\begin{center}
+{\Large CS221 Fall 2021 Homework 1}
+
+\begin{tabular}{rl}
+SUNet ID: & jxiangyu \\
+Name: & Xiangyu Liu \\
+\end{tabular}
+\end{center}
+
+By turning in this assignment, I agree by the Stanford honor code and declare
+that all of this is my own work.
+
+\section*{Problem 1}
+\begin{enumerate}[label=(\alph*)]
+\item
+Expanding the\(f(\theta)\) produces the following equation:
+\begin{equation}
+\begin{split}
+  f(x) &= \sum_{i=1}^{n}w_i(\theta - x_i)^2 \\
+    &= \theta^2\sum_{i=1}^{n}w_i - 2\theta \sum_{i=1}^{n}w_i x_i + \sum_{i=1}^{n}w_i x_i^2 \\
+\end{split}
+\end{equation}
+
+Because \(w_i\) is a positive real number, \(\sum_{i=1}^{n}w_i > 0\). Therefore, the quadratic function with respect to \(\theta\) is a convex parabola. Its vertex is the global minimum, a value of \(\theta\) that satisfies \( \frac {df(x)}{d\theta} = 0\).
+\begin{equation}
+\begin{split}
+  \frac {df(x)}{d\theta} &= \frac {d{\sum_{i=1}^{n}w_i(\theta - x_i)^2}}{d\theta} \\
+  &= \sum_{i=1}^{n}2w_i(\theta - x_i) \\
+  &= 2\theta \sum_{i=1}^{n}w_i - 2 \sum_{i=1}^{n}w_i*x_i
+\end{split}
+\end{equation}
+
+When \( \frac {df(x)}{d\theta}=0\), we have:
+\begin{equation}
+\begin{split}
+  2\theta \sum_{i=1}^{n}w_i - 2 \sum_{i=1}^{n}w_i*x_i = 0 \\
+\end{split}
+\end{equation}
+
+Because \(w_i\) is a positive real number, \(\sum_{i=1}^{n}w_i > 0\). Therefore, dividing \(\sum_{i=1}^{n}w_i\) on both sides will produce the value:
+\begin{equation}
+\begin{split}
+  \theta = \frac{\sum_{i=1}^{n}w_i*x_i}{\sum_{i=1}^{n}w_i}\end{split}
+\end{equation}
+
+If some \(w_i\) are negative number, then \(\sum_{i=1}^{n}w_i\) can be 0 or negative. Therefore, this quadratic function might not be a convex parabola. and the global minimum value might not exist.
+
+\item
+Answer: \(f(x) <= g(x)\).
+
+Proof:
+\begin{equation}
+\begin{split}
+  f(x) &= max_{s\in[-1,1]}\sum_{i=1}^{d}s x_i \\
+  &= max_{s\in[-1,1]}s(x_1 + x_2 + ... + x_d) \\
+  &= max_{s\in[-1,1]}(sx_1 + sx_2 + ... + sx_d) \\
+\end{split}
+\end{equation}
+\begin{equation}
+\begin{split}
+  g(x) &= \sum_{i=1}^{d}max_{s_i\in[-1,1]}s_i x_i \\
+  &=max_{s_1\in[-1,1]}s_1 x_1 + max_{s_2\in[-1,1]}s_2 x_2 + ... + max_{s_d\in[-1,1]}s_d x_d \\
+\end{split}
+\end{equation}
+Because the sum of the max is always greater than or equal to the max of the sum, \(f(x) <= g(x)\).
+
+\item
+Let \(V\) be the expected number of points. Then
+\begin{equation}
+\begin{split}
+    V &= \sum_{i=1}^{6}\frac{1}{6} * (PointsOfRolling(i) + PointsOfNextRoll(i)) \\
+    &= \frac{1}{6} * 0 + \frac{1}{6} * 0 + \frac{1}{6} * (-a + V) + \frac{1}{6} * (b + V) + \frac{1}{6} * V + \frac{1}{6} * V \\
+    &= \frac{b-a}{6} + \frac{2V}{3} \\
+\end{split}
+\end{equation}
+Then
+\begin{equation}
+\begin{split}
+    V = \frac{b-a}{2}
+\end{split}
+\end{equation}
+
+\item
+\begin{equation}
+\begin{split}
+    \frac{dln(L(p))}{dp} &= \frac{1}{L(p)}\frac{dL(p)}{dp} \\
+    &= \frac{1}{p^4(1-p)^2}\frac{d(p^6 - 2p^5 + p^4)}{dp} \\
+    &= \frac{1}{p^4(1-p)^2}(6p^5 - 10p^4 + 4p^3) \\
+    &= \frac{6p^2 - 10p + 4}{p(1-p)^2} \\
+    &= \frac{6p - 4}{p(p-1)}
+\end{split}
+\end{equation}
+
+When \(\frac{6p - 4}{p(p-1)}  = 0\), \(lg(L(p))\) is maximized, thus \(L(p)\) is maximized. Therefore \(p = \frac{2}{3}\)
+
+\item
+\begin{equation}
+\begin{matrix}
+    P(A|B) = P(B|A) \\
+    \frac{P(A \cap B)}{P(B)} = \frac{P(B \cap A)}{P(A)} \\
+    P(A) = \frac{P(B \cap A)}{P(A \cap B)}P(B) \\
+    P(A) = \frac{P(B \cap A)}{P(A \cap B)}P(B) \\
+    P(A) = \frac{P(B \cap A)}{P(B \cap A)}P(B) \\
+    P(A) = P(B)
+\end{matrix}
+\end{equation}
+Now use the equation above to simplify \(P(A \cup B)\):
+\begin{equation}
+\begin{matrix}
+    P(A \cup B) = \frac{1}{2} \\
+    P(A) + P(B) - P(A \cap B) = \frac{1}{2} \\
+    2 P(A) = \frac{1}{2} + P(A \cap B) \\
+     P(A) = \frac{1}{4} + \frac{P(A \cap B)}{2} > \frac{1}{4} \\
+\end{matrix}
+\end{equation}
+
+\item
+The gradient is a d-dimensional vector of the partial derivatives with respect to each \(w_i\):
+\begin{equation}
+\begin{matrix}
+    \nabla f(\boldsymbol{w}) = (\frac{\partial{f(\boldsymbol{w})}}{\partial{w_1}}, ... \frac{\partial{f(\boldsymbol{w})}}{\partial{w_d}})^T
+\end{matrix}
+\end{equation}
+
+Consider a given \(w_x\), where \(1 <= x <= d\), the partial derivative with respect to \(w_x\) is:
+\begin{equation}
+\begin{matrix}
+    \frac{\partial{f(\boldsymbol{w})}}{\partial{w_x}} &=
+        \frac{\partial{(\sum_{i=1}^{n}\sum_{j=1}^{n}(\boldsymbol{a}_i^T
+        \boldsymbol{w} - \boldsymbol{b}_j^T \boldsymbol{w})^2) + \frac{\lambda}{2}\|\boldsymbol{w}\|_2^2)}}{\partial{w_x}} \\
+    &=  \frac{\partial{\sum_{i=1}^{n}\sum_{j=1}^{n}((\boldsymbol{a}_i^T
+        - \boldsymbol{b}_j^T) \boldsymbol{w})^2}}
+        {\partial{w_x}}
+        + \frac{\lambda}{2}\frac{\partial{\|\boldsymbol{w}\|_2^2}}
+        {\partial{w_x}}      \\
+    &=  \frac{\partial{\sum_{i=1}^{n}\sum_{j=1}^{n}((\boldsymbol{a}_i^T
+        - \boldsymbol{b}_j^T) \boldsymbol{w})^2}}
+        {\partial{w_x}}
+        + \frac{\lambda}{2}\frac{\partial{\sum_{k=1}^{d}w_k^2}}
+        {\partial{w_x}}      \\
+    &=  \frac{\partial{\sum_{i=1}^{n}\sum_{j=1}^{n}
+        ((\boldsymbol{a}_i^T - \boldsymbol{b}_j^T) \boldsymbol{w})^2}}
+        {\partial{w_x}}
+        + \frac{\lambda}{2}\frac{\partial{\sum_{k=1}^{d}w_k^2}}
+        {\partial{w_x}}      \\
+    &=  \sum_{i=1}^{n}\sum_{j=1}^{n}
+        \frac{\partial{((\boldsymbol{a}_i^T - \boldsymbol{b}_j^T) \boldsymbol{w})^2}}
+        {\partial{w_x}}
+        + \frac{\lambda}{2}\sum_{k=1}^{d}\frac{\partial{w_k^2}}
+        {\partial{w_x}}      \\
+\end{matrix}
+\end{equation}
+Let's examine the first term in the equation:
+
+\begin{equation}
+\begin{matrix}
+    \sum_{i=1}^{n}\sum_{j=1}^{n}
+        \frac{\partial{((\boldsymbol{a}_i^T - \boldsymbol{b}_j^T) \boldsymbol{w})^2}}
+        {\partial{w_x}}
+    &=  \sum_{i=1}^{n}\sum_{j=1}^{n}
+        \frac{2(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w} \partial{(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w}}}
+        {\partial{w_x}}    \\
+\end{matrix}
+\end{equation}
+
+For all \(w_i\), where \( i \ne x\), \(\frac{\partial{w_i}} {\partial{w_x}} = 0\).
+
+Hence:
+\begin{equation}
+\begin{matrix}
+    \frac{
+    \partial{(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w}}}
+        {\partial{w_x}} &= (\boldsymbol{a}_i[x] - \boldsymbol{b}_j[x])
+\end{matrix}
+\end{equation}
+Where \(\boldsymbol{a}_i[x]\) denotes the \(x-th\) element in vector \(\boldsymbol{a}_i\), and \(\boldsymbol{b}_i[x]\) denotes the \(x-th\) element in vector \(\boldsymbol{b}_i\).
+
+This results in:
+\begin{equation}
+\begin{matrix}
+    \sum_{i=1}^{n}\sum_{j=1}^{n}
+        \frac{2(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w} \partial{(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w}}}
+        {\partial{w_x}} &=
+        \sum_{i=1}^{n}\sum_{j=1}^{n}
+        2(\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w}
+        (\boldsymbol{a}_i[x] - \boldsymbol{b}_j[x])
+\end{matrix}
+\end{equation}
+
+Similarly,
+\begin{equation}
+\begin{matrix}
+    \frac{\lambda}{2}\sum_{k=1}^{d}\frac{\partial{w_k^2}}
+        {\partial{w_x}}
+    &= \frac{\lambda}{2}\frac{\partial{w_x^2}}
+        {\partial{w_x}} \\
+    &= \frac{\lambda}{2}2w_x \\
+    &= \lambda w_x \\
+\end{matrix}
+\end{equation}
+
+Therefore,
+\begin{equation}
+\begin{matrix}
+    \frac{\partial{f(\boldsymbol{w})}}{\partial{w_x}} &=
+        \lambda w_x +
+        2(\boldsymbol{a}_i[x] - \boldsymbol{b}_j[x])\sum_{i=1}^{n}\sum_{j=1}^{n}
+        (\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w} \\
+\end{matrix}
+\end{equation}
+
+Finally,
+\begin{equation}
+\begin{matrix}
+
+    \nabla f(\boldsymbol{w}) = \\ [ & \\
+        \lambda w_1 +
+        2(\boldsymbol{a}_i[1] - \boldsymbol{b}_j[1])\sum_{i=1}^{n}\sum_{j=1}^{n}
+        (\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w}, \\
+        \lambda w_2 +
+        2(\boldsymbol{a}_i[2] - \boldsymbol{b}_j[2])\sum_{i=1}^{n}\sum_{j=1}^{n}
+        (\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w} \\
+        ... &, \\
+        \lambda w_d +
+        2(\boldsymbol{a}_i[d] - \boldsymbol{b}_j[d])\sum_{i=1}^{n}\sum_{j=1}^{n}
+        (\boldsymbol{a}_i^T - \boldsymbol{b}_j^T)\boldsymbol{w} & \\]
+
+\end{matrix}
+\end{equation}
+\end{enumerate}
+
+\section*{Problem 2}
+
+\begin{enumerate}[label=(\alph*)]
+\item
+To determine a rectangle only requires to determine the 2 diagonal vertices of a rectangle. Hence, on a \(nxn\) grid, there are \(O(n^2)\) ways to place the top left vertex, and \(O(n^2)\) to place the bottom right vertex. Therefore, there are \(O(n^4)\) unique rectangles.
+
+To place 4 rectangles, there are  \(O((n^4)^4) = O(n^16)\) ways.
+
+\item
+Let \(Cost(i,j)\) be the minimal cost of the path that goes through position \((i,j)\) from position \((1,1)\). Because we can only step down or to the right, \(Cost(i,j)\) can be represented by:
+
+\begin{equation}
+Cost(i,j) = Min(Cost(i-1, j),Cost(i, j-1)) + c(i,j)
+\end{equation}
+
+By using Dynamic programming, we can start from position \((1,1)\) and calculate the \(Cost(i,j)\) for its neighbor on the right and below. Then repeat this operation to calculate the neighbors for each position, of which the \(Cost(i,j)\) has been determined, until the entire grid has been scanned.
+
+The runtime is \(O(n^2)\).
+\end{enumerate}
+
+
+\section*{Problem 3}
+
+\begin{enumerate}[label=(\alph*)]
+\item
+Because it predicts likelihood of loan default, this algorithm has likely \ul{encoded, contains, or potentially exacerbates bias against people of a certain race or ethnicity}. Because the economical status in the U.S. is unequal, Black people tend to have lower income than their white counterparts. Thus the algorithm will incorrectly predict that they will default a loan.
+
+\item
+Even though it is to analyze historical documents and literature, deanonymizing texts, including code, will \ul{raise safety or security concerns}, because it can open security vulnerabilities. It allows any hostile forces to identify the anonymous person and perform hostile acts to that person.
+
+\item
+Such development of the facial recognition technology uses \ul{information that could be deduced about individuals that they have not consented to share}, because the celebrities did not give permission for their images to be used in the dataset.
+
+\item
+Such model can potentially \ul{severely damage the environment}. Because it enables users to identify the plants in the wild, users will then know the worth of such plant. It can potentially result in significant deforestation.
+
+\end{enumerate}
+\end{document}
