@@ -1,6 +1,7 @@
 **/.DS_Store
 
 **/data/
+**/datasets/
 
 # Emacs backup files and autosaved files
 *~
