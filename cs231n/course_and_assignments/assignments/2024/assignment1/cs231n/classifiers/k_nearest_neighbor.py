@@ -141,9 +141,9 @@ class KNearestNeighbor(object):
         sum_test_sq = np.sum(X * X, axis = 1)
         sum_train_sq = np.sum(self.X_train * self.X_train, axis = 1)
         test_dot_train = X.dot(self.X_train.T)
-        print(test_dot_train.shape)
+#        print(test_dot_train.shape)
         dists = np.sqrt(-2 * test_dot_train + sum_test_sq[:, np.newaxis] + sum_train_sq)
-        print("done", dists.shape)
+#        print("done", dists.shape)
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         return dists
 
