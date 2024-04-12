@@ -88,9 +88,17 @@ def svm_loss_vectorized(W, X, y, reg):
     # result in loss.                                                           #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+#    print("W shape:", W.shape)
+#    print("X shape:", X.shape)
+    s = X.dot(W)
+#    print("s:", s.shape)
+    correct_scores = s[np.arange(s.shape[0]), y]
+#    print("corrected", correct_scores[:, np.newaxis])
+    loss = s - correct_scores[:, np.newaxis] + 1 # note delta = 1. This adds 1 for the corrected class too
+    loss = np.maximum(0, loss) 
+#    print("loss", loss.shape)
+    loss = np.sum(loss) - 1 * X.shape[0] # substract 1 delta to counter the fact that 1 was previously added for the each corrected class
+    loss = np.sum(loss) / X.shape[0]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     #############################################################################
