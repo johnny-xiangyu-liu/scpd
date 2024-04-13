@@ -98,9 +98,12 @@ def svm_loss_vectorized(W, X, y, reg):
     loss = s - correct_scores[:, np.newaxis] + 1 # note delta = 1. This adds 1 for the corrected class too
     loss = np.maximum(0, loss)
 #    print("loss:", loss)
-    grad_mask = np.zeros(loss.shape)
-    grad_mask[loss > 0] = 1
-    grad_mask[np.arange(s.shape[0]), y] = 0
+    ds = np.zeros(loss.shape)
+    ds[loss > 0] = 1
+    ds[np.arange(s.shape[0]), y] = 0
+#    print("ds:", ds)
+    ds[np.arange(s.shape[0]), y] = -np.sum(ds, axis = 1)
+#    print("ds:", ds)
 
 #    print("gradmask", grad_mask)
     loss = np.sum(loss) - 1 * X.shape[0] # substract 1 delta to counter the fact that 1 was previously added for the each corrected class
@@ -119,18 +122,20 @@ def svm_loss_vectorized(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    dW = X.T.dot(ds) / X.shape[0]
+#    print(dW)
 #    print("xi stack", X[:, np.newaxis].swapaxes(1,2).shape)
-    grad_mask = grad_mask[:, np.newaxis]
+#    grad_mask = grad_mask[:, np.newaxis]
 #    print("grad_mask:", grad_mask.shape)
-    grad_tensor = grad_mask * X[:, np.newaxis].swapaxes(1,2)
+#    grad_tensor = grad_mask * X[:, np.newaxis].swapaxes(1,2)
 #    print("first grad_tensor:", grad_tensor.shape, grad_tensor)
 
 #    print("sum:", np.sum(grad_tensor, axis = 2))
 #    print(grad_tensor[np.arange(s.shape[0]), :, y])   
-    grad_tensor[np.arange(s.shape[0]),:, y] = -np.sum(grad_tensor, axis = 2)
+#    grad_tensor[np.arange(s.shape[0]),:, y] = -np.sum(grad_tensor, axis = 2)
 #    print("second grad_tensor:", grad_tensor)
 #    print("sum", np.sum(grad_tensor, axis = 0))
-    dW = np.sum(grad_tensor, axis = 0) / X.shape[0]
+#    dW = np.sum(grad_tensor, axis = 0) / X.shape[0]
     dW += reg * 2 * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
