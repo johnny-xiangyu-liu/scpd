@@ -116,10 +116,8 @@ def relu_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    mask = x
-    mask[mask > 0] = 1
-    mask = np.maximum(0, mask)
-
+    mask = np.zeros_like(x)
+    mask[x > 0] = 1
     dx = dout * mask
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
