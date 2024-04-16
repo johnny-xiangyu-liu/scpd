@@ -54,14 +54,29 @@ class TwoLayerNet(object):
         # weights and biases using the keys 'W2' and 'b2'.                         #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        self.set_param('W1', np.random.normal(0, weight_scale, size = (input_dim, hidden_dim)))
+        self.set_param('b1', np.zeros(hidden_dim))
+        self.set_param('W2', np.random.normal(0, weight_scale, size = (hidden_dim, num_classes)))
+        self.set_param('b2', np.zeros(num_classes))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
 
+    def get_param(self, param_name):
+        return self.params[param_name]
+    def set_param(self, param_name, val):
+        self.params[param_name] = val
+    def w1(self):
+        return self.get_param('W1')
+    def b1(self):
+        return self.get_param('b1')
+    def w2(self):
+        return self.get_param('W2')
+    def b2(self):
+        return self.get_param('b2')
+    
     def loss(self, X, y=None):
         """
         Compute loss and gradient for a minibatch of data.
@@ -87,9 +102,16 @@ class TwoLayerNet(object):
         # class scores for X and storing them in the scores variable.              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
-
+#        print("X shape", X.shape)
+        N = X.shape[0]
+        x = X.reshape((N, -1))
+        z1, z1_cache = affine_forward(x, self.w1(), self.b1())
+#        print("z1", z1.shape)
+        z_relu, z_relu_cache = relu_forward(z1)
+#        print("z_relu", z_relu.shape)        
+        scores, z2_cache = affine_forward(z_relu, self.w2(), self.b2())
+#        print("scores", scores.shape)
+#        print(scores)
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -112,8 +134,20 @@ class TwoLayerNet(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        loss, dx = softmax_loss(scores, y)
+        loss += self.reg * (np.sum(self.w1() * self.w1()) + np.sum(self.w2() * self.w2()))/2
+#        print(loss)
 
+        dz2, dw2, db2 = affine_backward(dx, z2_cache)
+        dz1 = relu_backward(dz2, z_relu_cache)
+        dx, dw1, db1 = affine_backward(dz1, z1_cache)
+
+        grads['W1'] = dw1 + self.reg * self.w1()
+        grads['b1'] = db1
+        grads['W2'] = dw2 + self.reg * self.w2()
+        grads['b2'] = db2
+        
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #

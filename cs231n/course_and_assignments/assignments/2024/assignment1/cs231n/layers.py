@@ -27,9 +27,8 @@ def affine_forward(x, w, b):
     # will need to reshape the input into rows.                               #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    num_train = x.shape[0]
+    out = np.reshape(x, (num_train, -1)).dot(w) + b
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -60,8 +59,11 @@ def affine_backward(dout, cache):
     # TODO: Implement the affine backward pass.                               #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    num = dout.shape[0]
 
-    pass
+    dx = dout.dot(w.T).reshape(x.shape)
+    dw = x.reshape((num, -1)).T.dot(dout)
+    db = np.sum(dout, axis = 0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -86,8 +88,7 @@ def relu_forward(x):
     # TODO: Implement the ReLU forward pass.                                  #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    out = np.maximum(0, x)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -102,6 +103,7 @@ def relu_backward(dout, cache):
     Computes the backward pass for a layer of rectified linear units (ReLUs).
 
     Input:
+
     - dout: Upstream derivatives, of any shape
     - cache: Input x, of same shape as dout
 
@@ -114,7 +116,11 @@ def relu_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    mask = x
+    mask[mask > 0] = 1
+    mask = np.maximum(0, mask)
+
+    dx = dout * mask
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -772,9 +778,23 @@ def svm_loss(x, y):
     # TODO: Copy over your solution from A1.
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    correct_scores = x[np.arange(x.shape[0]), y]
+#    print("corrected", correct_scores[:, np.newaxis])
+    loss = x - correct_scores[:, np.newaxis] + 1 # note delta = 1. This adds 1 for the corrected class too
+    loss = np.maximum(0, loss)
+#    print("loss:", loss)
+    dx = np.zeros(loss.shape)
+    dx[loss > 0] = 1
+    dx[np.arange(x.shape[0]), y] = 0
+#    print("ds:", ds)
+    dx[np.arange(x.shape[0]), y] = -np.sum(dx, axis = 1)
+#    print("ds:", ds)
 
-    pass
+#    print("gradmask", grad_mask)
+    loss = np.sum(loss) - 1 * x.shape[0] # substract 1 delta to counter the fact that 1 was previously added for the each corrected class
+    loss = np.sum(loss) / x.shape[0]
 
+    dx/= x.shape[0]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -802,9 +822,18 @@ def softmax_loss(x, y):
     # TODO: Copy over your solution from A1.
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+#    print("x", x.shape)
+    num = x.shape[0]
+    scores = np.exp(x)
+    sums = np.sum(scores, axis =1)
+    loss = -np.log(scores[np.arange(num), y] / sums)
+    loss = np.sum(loss) / num
 
-    pass
+    dx = scores / sums[:, np.newaxis]
+#    print("Y:", y)
+    dx[np.arange(num), y] -= 1
 
+    dx/= num
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
