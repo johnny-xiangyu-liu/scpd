@@ -81,8 +81,12 @@ class FullyConnectedNet(object):
             dim_o = dims[i]
             self.set_w(i, np.random.normal(0, weight_scale, size = (dim_i, dim_o)))
             self.set_b(i, np.zeros(dim_o))
+        if self.normalization:
+            for i, dim_o  in enumerate(hidden_dims):
+                self.set_gamma(i+1, np.ones(dim_o))
+                self.set_beta(i+1, np.zeros(dim_o))
 
-        print(dims)
+        
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -121,6 +125,16 @@ class FullyConnectedNet(object):
         return self.params['W' + str(i)]
     def b(self, i):
         return self.params['b' + str(i)]
+    
+    def set_gamma(self, i, val):
+        self.params['gamma' + str(i)] = val
+    def set_beta(self, i , val):
+        self.params['beta' + str(i)] = val
+    def gamma(self, i):
+        return self.params['gamma' + str(i)]
+    def beta(self, i):
+        return self.params['beta' + str(i)]
+    
     
     def loss(self, X, y=None):
         """Compute loss and gradient for the fully connected net.
@@ -167,18 +181,26 @@ class FullyConnectedNet(object):
 
         caches = []
         for i in range(1, self.num_layers):
-#            print(">>i:", i, ", X:", X.shape)
             w = self.w(i)
             b = self.b(i)
 
             X, cache = affine_forward(X, w, b)
             caches.append(cache)
 #            print("affine forward", X.shape)
-            # TODO add batch/layer norm
+
+            if self.normalization == "batchnorm":
+                X, cache = batchnorm_forward(X, self.gamma(i), self.beta(i), self.bn_params[i-1])
+                caches.append(cache)
+            elif self.normalization == "layernorm":
+                X, cache = layernorm_forward(X, self.gamma(i), self.beta(i), {})
+                caches.append(cache)
+
             X, cache  = relu_forward(X)
             caches.append(cache)
-#            print("relu forward", X.shape)
-            # TODO add dropout
+
+            if self.use_dropout:
+                X, cache = dropout_forward(X, self.dropout_param)
+                caches.append(cache)
 
         X, cache = affine_forward(X, self.w(self.num_layers), self.b(self.num_layers))
         caches.append(cache)
@@ -222,10 +244,20 @@ class FullyConnectedNet(object):
             grads['W' + str(i)] = dw + self.reg * self.w(i)
             grads['b' + str(i)] = db
             # TODO add dropout
+            if self.use_dropout:
+                dx = dropout_backward(dx, caches.pop())
+
             dx = relu_backward(dx, caches.pop())
 
-            # TODO add batch norm
-            
+            if self.normalization == 'batchnorm':
+                dx, dgamma, dbeta = batchnorm_backward(dx, caches.pop())
+                grads['gamma' + str(i-1)] = dgamma
+                grads['beta' + str(i-1)] = dbeta
+            elif self.normalization == "layernorm":
+                dx, dgamma, dbeta = layernorm_backward(dx, caches.pop())
+                grads['gamma' + str(i-1)] = dgamma
+                grads['beta' + str(i-1)] = dbeta
+
         dx, dw, db = affine_backward(dx, caches.pop())
         assert len(caches) == 0, "cache is not empty"
         grads['W1'] = dw + self.reg * self.w(1)
