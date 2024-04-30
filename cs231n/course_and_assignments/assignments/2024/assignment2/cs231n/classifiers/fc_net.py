@@ -206,7 +206,6 @@ class FullyConnectedNet(object):
         caches.append(cache)
         scores = X
 
-#        print("score:", scores)
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
