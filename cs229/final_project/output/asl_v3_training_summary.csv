@@ -1,2 +1,0 @@
-training_losses,training_accuracies (in %),training epoch time,training lr,test_losses,test_accuracies (in %),test epoch time
-0.23738005757331848,10.434197239986537,201.8462016582489,0.1,2.302585360209147,10.377358490566039,37.50439119338989
