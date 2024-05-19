@@ -20,14 +20,14 @@ import imagedata
 
 import fiftyone.utils.coco as fouc
 from PIL import Image
-
+import json 
+import pandas as pd
 
 class Coco(VisionDataset):
     
     def __init__(
         self,
         dataset_type: str = "train", # or "validation" or "test"
-        gt_field="ground_truth",
         classes=None,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
@@ -36,57 +36,39 @@ class Coco(VisionDataset):
         super().__init__(root=None, transforms = transforms, transform = transform, target_transform = target_transform)
         self.dataset = foz.load_zoo_dataset("coco-2017", split = dataset_type)
         self.dataset.persistent = True
-        self.gt_field = gt_field
-        self.img_paths = self.dataset.values("filepath")
-        self.classes = classes
-        if not self.classes:
-            # Get list of distinct labels that exist in the view
-            self.classes = self.dataset.distinct(
-                "%s.detections.label" % gt_field
-            )
+        self.image_paths = self.dataset.values("filepath")
 
-        if self.classes[0] != "background":
-            self.classes = ["background"] + self.classes
-
-        self.labels_map_rev = {c: i for i, c in enumerate(self.classes)}
+        
+        if dataset_type == "train":
+            captions_path = constants.CAPTION_TRAIN
+        elif dataset_type == "val":
+            captions_path = constants.CAPTION_VAL
+        else:
+            captions_path = None
+        
+        if captions_path:
+            with open(captions_path, 'r') as f:
+                data = json.load(f)
+                captions = data['annotations']
+                self.captions = pd.DataFrame(captions, columns=['image_id', 'id', 'caption'])
+        
 
     def __getitem__(self, idx):
-        img_path = self.img_paths[idx]
-        sample = self.dataset[img_path]
-        metadata = sample.metadata
-        img = Image.open(img_path).convert("RGB")
-
-        boxes = []
-        labels = []
-        area = []
-        iscrowd = []
-        detections = sample[self.gt_field].detections
-        for det in detections:
-            category_id = self.labels_map_rev[det.label]
-            coco_obj = fouc.COCOObject.from_label(
-                det, metadata, category_id=category_id,
-            )
-            x, y, w, h = coco_obj.bbox
-            boxes.append([x, y, x + w, y + h])
-            labels.append(coco_obj.category_id)
-            area.append(coco_obj.area)
-            iscrowd.append(coco_obj.iscrowd)
-
-        print(detections)
-        target = {}
-        target["boxes"] = torch.as_tensor(boxes, dtype=torch.float32)
-        target["labels"] = torch.as_tensor(labels, dtype=torch.int64)
-        target["image_id"] = torch.as_tensor([idx])
-        target["area"] = torch.as_tensor(area, dtype=torch.float32)
-        target["iscrowd"] = torch.as_tensor(iscrowd, dtype=torch.int64)
+        image_path = self.image_paths[idx]
+        image = Image.open(image_path).convert("RGB")
+        image_id = int(os.path.basename(image_path).removesuffix('.jpg'))
 
         if self.transforms is not None:
-            img, target = self.transforms(img, target)
+            image, _ = self.transforms(image, None)
 
-        return imagedata.ImageData(target["image_id"], img, {}, target)
+        annotations = {}
+        if self.captions is not None:
+            c = self.captions.loc[self.captions['image_id'] == image_id, ['caption']].values.flatten().tolist()
+            annotations['captions'] = c
+        return imagedata.ImageData(image_id, image_path, image, annotations)
 
     def __len__(self):
-        return len(self.img_paths)
+        return len(self.image_paths)
     
 
 class Flickr30k(VisionDataset):
