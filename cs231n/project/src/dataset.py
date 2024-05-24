@@ -15,13 +15,24 @@ import fiftyone as fo
 import fiftyone.zoo as foz
 
 import constants
-from flickr30k_util.flickr30k_entities_utils import get_sentence_data, get_annotations
 import imagedata
 
 import fiftyone.utils.coco as fouc
 from PIL import Image
 import json 
 import pandas as pd
+
+def load(file_path:str, key:str, columns: list[str] = None):
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+        return pd.DataFrame(data[key], columns= columns)
+
+    
+def answer_to(answers_pd, question_id: int):
+    return answers_pd.loc[answers_pd['question_id'] == question_id]["multiple_choice_answer"].values[0]
+
+def max_len(column):
+    return column.str.len().max()
 
 class Coco(VisionDataset):
     
@@ -40,18 +51,27 @@ class Coco(VisionDataset):
 
         
         if dataset_type == "train":
-            captions_path = constants.CAPTION_TRAIN
+            self.captions = load(constants.CAPTION_TRAIN, key = "annotations", columns= ['image_id', 'caption'])
+            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_TRAIN, key = "questions")
+            self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_TRAIN, key = "annotations",
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id', 'answer_type', 'question_type'])
         elif dataset_type == "val":
-            captions_path = constants.CAPTION_VAL
+            # don't need to load validation captions
+#            self.captions = load(constants.CAPTION_VAL, key = "annotations", columns= ['image_id', 'caption'])
+            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_VAL, key = "questions")
+            self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_VAL, key = "annotations",
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id', 'answer_type', 'question_type'])
         else:
-            captions_path = None
+            self.captions = None
+            self.questions = None
+            self.answers = None
         
-        if captions_path:
-            with open(captions_path, 'r') as f:
-                data = json.load(f)
-                captions = data['annotations']
-                self.captions = pd.DataFrame(captions, columns=['image_id', 'id', 'caption'])
         
+        
+    def get(self, annotations, image_id):
+        if annotations is None:
+            return None
+        return annotations.loc[annotations['image_id'] == image_id]
 
     def __getitem__(self, idx):
         image_path = self.image_paths[idx]
@@ -62,81 +82,22 @@ class Coco(VisionDataset):
             image, _ = self.transforms(image, None)
 
         annotations = {}
-        if self.captions is not None:
-            c = self.captions.loc[self.captions['image_id'] == image_id, ['caption']].values.flatten().tolist()
-            annotations['captions'] = c
+        captions = self.get(self.captions, image_id)
+        questions  = self.get(self.questions, image_id)
+        answers = self.get(self.answers, image_id)
+        
+        if captions is not None:
+            annotations['captions'] = captions['caption'].tolist()
+        if questions is not None:
+            qa = []
+            for index, row in questions.iterrows():
+                q_id = row['question_id']
+                q = row['question']
+                ans = answer_to(answers, q_id)
+                qa.append((q, ans))
+            annotations['qa'] = qa
         return imagedata.ImageData(image_id, image_path, image, annotations)
 
     def __len__(self):
         return len(self.image_paths)
     
-
-class Flickr30k(VisionDataset):
-    """
-    Based on https://pytorch.org/vision/stable/_modules/torchvision/datasets/flickr.html#Flickr30k
-
-    Args:
-        images_dir (str or ``pathlib.Path``): Root directory where images are downloaded to.
-        image_ids_file (string): Path to image ids to load images
-        annotation_dir (string): Path to load annotations (bounding boxes)
-        sentence_dir (string): Path to load sentences
-        transform (callable, optional): A function/transform that takes in a PIL image
-            and returns a transformed version. E.g, ``transforms.PILToTensor``
-        target_transform (callable, optional): A function/transform that takes in the
-            target and transforms it.
-    """
-
-    def __init__(
-        self,
-        image_ids_file: str,
-        images_dir: str = constants.FLICKR30k_IMAGE_DIR,  
-        annotation_dir: str= constants.FLICKR30k_ANNOTATION_DIR,
-        sentence_dir: str= constants.FLICKR30k_SENTENCE_DIR,
-        transform: Optional[Callable] = None,
-        target_transform: Optional[Callable] = None,
-    ) -> None:
-        super().__init__(root=None, transform=transform, target_transform=target_transform)
-
-        self.images_dir = images_dir
-        self.image_ids_file = image_ids_file
-        self.annotation_dir = annotation_dir
-        self.sentence_dir = sentence_dir
-
-        self.image_ids = list()
-        with open(self.image_ids_file) as fh:
-            for line in fh:
-                self.image_ids.append(line.strip())
-
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
-        """
-        Args:
-            index (int): Index
-
-        Returns:
-            tuple: Tuple (image, target). target is a list of captions for the image.
-        """
-        img_id = self.image_ids[index]
-
-        # Image
-        filename = os.path.join(self.images_dir, img_id + ".jpg")
-        img = Image.open(filename).convert("RGB")
-        if self.transform is not None:
-            img = self.transform(img)
-
-        # Sentences
-        sentences = None
-        if self.sentence_dir is not None:
-            sentence_file = os.path.join(self.sentence_dir, img_id + ".txt")
-            sentences = get_sentence_data(sentence_file)
-
-        # Annotation
-        annotations = None
-        if self.annotation_dir is not None:
-            annotation_file = os.path.join(self.annotation_dir, img_id+ ".xml")
-            annotations = get_annotations(annotation_file)
-
-        return imagedata.ImageData(img_id, img, sentences, annotations)
-
-
-    def __len__(self) -> int:
-        return len(self.image_ids)
