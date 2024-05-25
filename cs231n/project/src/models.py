@@ -101,6 +101,12 @@ def flatten(results):
         qas.append(qa)
     return ids, torch.stack(images, dim=0), captions, qas
 
+def blow_to(images, replicas):
+    result= []
+    for i in replicas:
+        result.append(images[i])
+    return torch.stack(result)
+    
 class VQANet(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
@@ -109,7 +115,7 @@ class VQANet(nn.Module):
         self.text_encoder = TextEncoder(self.tokenizer)
         self.embedding = self.text_encoder.model.embeddings
         text_embedding_size = self.text_encoder.model.config.hidden_size
-        self.linear = nn.Linear(constants.IMAGE_BACKBONE_POOL_DIM, text_embedding_size)
+        self.to_text_embedding = nn.Linear(constants.IMAGE_BACKBONE_POOL_DIM, text_embedding_size)
         
         
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=text_embedding_size, nhead=8, batch_first = True)
@@ -123,19 +129,29 @@ class VQANet(nn.Module):
         
     def forward(self, x, device):
         """
-        x: List of ImageData
+        returns:
+         image embedding: shape of (N, 768)
+         captions embeddings: shape of (M, 768) where M = sum( # of captions of image for image in images)
+         output_logits: (seq, K, WORD_SIZE) where K = sum(# of qas of image for image in images),
+                         seq: the padded sequence length output by the tokenizer
+                         WORD_SIZE: all the worlds that the tokenizer knows about (constant). (~30k)
         """
 
-        ids, images, captions, qas = flatten(x)
+        ids = x['image_ids']
+        images = torch.stack(x['images'], dim = 0).to(device)
+        captions = x['captions']
+        qas = x['qa']
+        c2i = x['c2i']
+        qa2i = x['qa2i']
+
         N = images.shape[0]
         print(images.shape)
 
         feature_map = self.image_backbone(images)
         print("feature_map", feature_map.keys())
         pool = feature_map['pool']
-        projection = self.linear(pool.view(N, -1))
+        projection = self.to_text_embedding(pool.view(N, -1))
         print("projection", projection.shape)
-        
         image_embedding = self.image_encoder(projection)
         print("image_embedding", image_embedding.shape)
         
@@ -152,15 +168,19 @@ class VQANet(nn.Module):
         embed = embed.transpose(0,1)
         print("embedding", embed.shape)
         
-        image_embedding = torch.broadcast_to(image_embedding, embed.shape)
+        image_embed_for_qa = blow_to(image_embedding, qa2i)
+        image_embed_for_qa = torch.broadcast_to(image_embed_for_qa, embed.shape)
+        print("image_embed_for_qa", image_embed_for_qa.shape)
+        
         qa_mask = nn.Transformer.generate_square_subsequent_mask(embed.shape[0]).to(device)
         
-        output_embedding = self.decoder(tgt = embed, memory = image_embedding, tgt_mask=qa_mask )
+        print("qa_mask", qa_mask.shape)
+        output_embedding = self.decoder(tgt = embed, memory = image_embed_for_qa, tgt_mask=qa_mask )
         
         out_logits = self.output(output_embedding)
         
-        print("out_logits", out_logits)
-        return out_logits
+        print("out_logits", out_logits.shape)
+        return image_embedding, captions_embedding, out_logits
     
     
     
