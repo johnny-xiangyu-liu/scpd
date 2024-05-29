@@ -117,7 +117,7 @@ class MultiHeadAttention(nn.Module):
         self.query = nn.Linear(embed_dim, embed_dim)
         self.value = nn.Linear(embed_dim, embed_dim)
         self.proj = nn.Linear(embed_dim, embed_dim)
-        
+
         self.attn_drop = nn.Dropout(dropout)
 
         self.n_head = num_heads
@@ -164,8 +164,36 @@ class MultiHeadAttention(nn.Module):
         #     function masked_fill may come in handy.                              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        print(">>>")
+        print("query", query.shape)
+        print("key", key.shape)
+        print("value", value.shape)
 
-        pass
+        H = self.n_head
+        EH = E //H
+        scale = math.sqrt(EH)
+
+        q = self.query(query)
+        k = self.key(key)
+        v = self.value(value)
+        q = q.reshape(N, S, H, EH)
+        k = k.reshape(N, T, H, EH)
+        v = v.reshape(N, T, H, EH)
+
+        q = q.permute(0, 2, 1, 3) # N, H, S, EH
+        k = k.permute(0, 2, 3, 1) # N, H, EH, T
+        v = v.permute(0, 2, 3, 1) # N, H, EH, T
+        e = torch.matmul(q, k) / scale  # N, H, S, T
+        if attn_mask is not None:
+            e = e.masked_fill(attn_mask == 0, -float('inf'))
+        a = torch.softmax(e, axis = 3)
+        a = self.attn_drop(a)
+        v = v.unsqueeze(3)
+        a = a.unsqueeze(2)
+        mul = v * a
+        y = torch.sum(mul, axis = 4) # N, H, E/H, S
+        y = y.permute(0, 3, 1, 2).reshape(N, S, E)
+        output = self.proj(y)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
