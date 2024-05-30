@@ -37,9 +37,19 @@ class PositionalEncoding(nn.Module):
         # less than 5 lines of code.                                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        _, l, d = pe.shape
+        def sine(i, j):
+            return math.sin(i * 10000** (-j / d))
+        def cosine(i, j):
+            return math.cos(i * 10000** (- (j-1) / d))
+        for i in range(l):
+            for j in range(d):
+                if j % 2 == 0:
+                    pe[0][i][j] = sine(i,j)
+                else:
+                    pe[0][i][j] = cosine(i,j)
 
-        pass
-
+        self
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -69,8 +79,8 @@ class PositionalEncoding(nn.Module):
         # afterward. This should only take a few lines of code.                    #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        output = x + self.pe[:, :S, :D]
+        output = self.dropout(output)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -164,11 +174,6 @@ class MultiHeadAttention(nn.Module):
         #     function masked_fill may come in handy.                              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-        print(">>>")
-        print("query", query.shape)
-        print("key", key.shape)
-        print("value", value.shape)
-
         H = self.n_head
         EH = E //H
         scale = math.sqrt(EH)

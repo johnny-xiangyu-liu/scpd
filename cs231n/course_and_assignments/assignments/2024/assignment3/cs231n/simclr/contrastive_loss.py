@@ -18,8 +18,7 @@ def sim(z_i, z_j):
     #                                                                            #
     # HINT: torch.linalg.norm might be helpful.                                  #
     ##############################################################################
-    
-    
+    norm_dot_product = z_i.dot(z_j) / (torch.linalg.norm(z_i) * torch.linalg.norm(z_j))
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -55,8 +54,13 @@ def simclr_loss_naive(out_left, out_right, tau):
         # Hint: Compute l(k, k+N) and l(k+N, k).                                     #
         ##############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        def l(i, j):
+            zi = out[i]
+            zj = out[j]
+            import math
+            denominator = sum([0 if i == m else math.exp(sim(zi, out[m])/ tau) for m in range(out.shape[0])])
+            return -math.log(math.exp(sim(zi, zj) / tau) / denominator)
+        total_loss += l(k, k+N) + l(k+N, k)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
          ##############################################################################
@@ -89,8 +93,9 @@ def sim_positive_pairs(out_left, out_right):
     ##############################################################################
     
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    pos_pairs = torch.sum(out_left * out_right, axis = 1) 
+    denominator = (torch.linalg.norm(out_left, dim = 1) * torch.linalg.norm(out_right, dim = 1))
+    pos_pairs /= denominator
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
@@ -117,8 +122,10 @@ def compute_sim_matrix(out):
     ##############################################################################
     
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    result = torch.mm(out, out.T)
+    norm = torch.linalg.norm(out, dim = 1).unsqueeze(0)
+    denominator = torch.mm(norm.T, norm)
+    sim_matrix = result / denominator
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     
