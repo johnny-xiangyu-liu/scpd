@@ -14,28 +14,29 @@ from transformers import AutoTokenizer, BertModel
 #from transformers.models.bert import BertEmbeddings
 
 import constants
+from itertools import chain
 
-# from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-class PositionalEncoding(nn.Module):
+# # from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+# class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
+#     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+#         super().__init__()
+#         self.dropout = nn.Dropout(p=dropout)
 
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+#         position = torch.arange(max_len).unsqueeze(1)
+#         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+#         pe = torch.zeros(max_len, 1, d_model)
+#         pe[:, 0, 0::2] = torch.sin(position * div_term)
+#         pe[:, 0, 1::2] = torch.cos(position * div_term)
+#         self.register_buffer('pe', pe)
 
-    def forward(self, x):
-        """
-        Arguments:
-            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
-        """
-        x = x + self.pe[:x.size(0)]
-        return self.dropout(x)
+#     def forward(self, x):
+#         """
+#         Arguments:
+#             x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+#         """
+#         x = x + self.pe[:x.size(0)]
+#         return self.dropout(x)
 
 class TextEncoder(nn.Module):
     
@@ -85,9 +86,6 @@ class MaskRNNBackbone(nn.Module):
         features = self.image_backbone(images.tensors)
         return features
 
-def make_qa(q, a):
-    return constants.QUESTION_TOKEN +' ' + q +' ' + constants.ANSWER_TOKEN + ' ' + a + ' ' + constants.END_TOKEN
-
 
 def flatten(results):
     ids = []
@@ -102,29 +100,28 @@ def flatten(results):
     return ids, torch.stack(images, dim=0), captions, qas
 
 def blow_to(images, replicas):
-    result= []
-    for i in replicas:
-        result.append(images[i])
-    return torch.stack(result)
+    return images[replicas]
+
     
+
 class VQANet(nn.Module):
     def __init__(self, tokenizer):
         super().__init__()
-        self.tokenizer  = tokenizer
         self.image_backbone = MaskRNNBackbone()
-        self.text_encoder = TextEncoder(self.tokenizer)
+        self.text_encoder = TextEncoder(tokenizer)
         self.embedding = self.text_encoder.model.embeddings
         text_embedding_size = self.text_encoder.model.config.hidden_size
-        self.to_text_embedding = nn.Linear(constants.IMAGE_BACKBONE_POOL_DIM, text_embedding_size)
         
+        hidden_size = 2048
+        self.proj_to_text_embedding = nn.Sequential(
+            nn.Linear(constants.IMAGE_BACKBONE_POOL_DIM, hidden_size),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_size, text_embedding_size),
+            nn.LeakyReLU()
+        )
         
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=text_embedding_size, nhead=8, batch_first = True)
-        self.image_encoder =  nn.TransformerEncoder(self.encoder_layer, num_layers=4)
-
-        
-        self.position_encoding = PositionalEncoding(d_model=text_embedding_size)
-        self.decoder_layer = nn.TransformerDecoderLayer(d_model=text_embedding_size, nhead=8)
-        self.decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=6)
+        decoder_layer = nn.TransformerDecoderLayer(d_model=text_embedding_size, nhead=4)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=2)
         self.output = nn.Linear(text_embedding_size, len(tokenizer))
         
     def forward(self, x, device):
@@ -136,62 +133,104 @@ class VQANet(nn.Module):
                          seq: the padded sequence length output by the tokenizer
                          WORD_SIZE: all the worlds that the tokenizer knows about (constant). (~30k)
         """
-
+        
         ids = x['image_ids']
         images = torch.stack(x['images'], dim = 0).to(device)
-        captions = x['captions']
-        qas = x['qa']
+        cap_tokens = x['captions']
+        qa_input_ids = x['qa']
         c2i = x['c2i']
         qa2i = x['qa2i']
-
         N = images.shape[0]
-        print(images.shape)
 
         feature_map = self.image_backbone(images)
-        print("feature_map", feature_map.keys())
-        pool = feature_map['pool']
-        projection = self.to_text_embedding(pool.view(N, -1))
-        print("projection", projection.shape)
-        image_embedding = self.image_encoder(projection)
-        print("image_embedding", image_embedding.shape)
+        #print("feature_map", feature_map.keys())
+        image_embedding = self.get_image_embed(feature_map)
         
-        cap_tokens = self.tokenizer(captions, padding=True , return_tensors="pt").to(device)
-        captions_embedding = self.text_encoder(cap_tokens)
-        print("captions_embedding", captions_embedding.shape)
+        captions_embedding = None
+        image_embedding_for_captions = None
+        if cap_tokens is not None:
+            captions_embedding = self.text_encoder(cap_tokens)
+#            print("captions_embedding", captions_embedding.shape)
+            image_embedding_for_captions = blow_to(image_embedding, c2i)
+#            print("image_embedding_for_captions", image_embedding_for_captions.shape)
 
+
+        out_logits = None
+        if qa_input_ids is not None:
+            print("qa_input_ids", qa_input_ids)
+            qa_embed = self.embedding(input_ids = qa_input_ids)
+
+            # (seq, batch, embedding)
+            qa_embed = qa_embed.transpose(0,1)
+#            print("qa_embed", qa_embed.shape)
+
+            image_embed_for_qa = blow_to(image_embedding, qa2i)
+#            print("image_embed_for_qa", image_embed_for_qa.shape)
+
+            blown_image_embed_for_qa = torch.broadcast_to(image_embed_for_qa, qa_embed.shape)
+#            print("blown_image_embed_for_qa", blown_image_embed_for_qa.shape)
+
+            qa_mask = nn.Transformer.generate_square_subsequent_mask(qa_embed.shape[0]).to(device)
+
+#            print("qa_mask", qa_mask.shape)
+            output_embedding = self.decoder(tgt = qa_embed, memory = blown_image_embed_for_qa, tgt_mask=qa_mask )
+#            print("output_embedding", output_embedding.shape)
+            out_logits = self.output(output_embedding)
         
-        qa_tokens = self.tokenizer(qas, padding=True , return_tensors="pt").to(device)        
-        print("qa_tokens keys", qa_tokens.keys())
-        embed = self.embedding(input_ids = qa_tokens['input_ids'])
-        
-        # (seq, batch, embedding)
-        embed = embed.transpose(0,1)
-        print("embedding", embed.shape)
-        
-        image_embed_for_qa = blow_to(image_embedding, qa2i)
-        image_embed_for_qa = torch.broadcast_to(image_embed_for_qa, embed.shape)
-        print("image_embed_for_qa", image_embed_for_qa.shape)
-        
-        qa_mask = nn.Transformer.generate_square_subsequent_mask(embed.shape[0]).to(device)
-        
-        print("qa_mask", qa_mask.shape)
-        output_embedding = self.decoder(tgt = embed, memory = image_embed_for_qa, tgt_mask=qa_mask )
-        
-        out_logits = self.output(output_embedding)
-        
-        print("out_logits", out_logits.shape)
-        return image_embedding, captions_embedding, out_logits
+        return image_embedding_for_captions, captions_embedding, out_logits
+    
+    def get_image_embed(self, backbone_output):
+        pool = backbone_output['pool']
+        N = pool.shape[0]
+        pool = pool.view(N, -1)
+        return self.proj_to_text_embedding(pool)
+
+    def parameters(self):
+        tunable = [self.proj_to_text_embedding, self.decoder, self.output]
+        return chain.from_iterable([m.parameters() for m in tunable])
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    def answer(self, x, device, max_length=30):
+        """
+        """
+        with torch.no_grad():
+            for t in range(max_length):
+                print(f">>>>>{t}")
+                print(x)
+                indices = (x["qa"] == 102).nonzero() # 102 is the [SEP] token in bert.
+                last_word_indices = indices -torch.tensor([0, 1]) # get the token right before 102
+
+                print("indices", indices)
+                # Predict the next token (ignoring all other time steps).
+                image_embedding_for_captions, captions_embedding, output_logits = self.forward(x, device)
+                # (seq, K, WORD_SIZE) - > (K, seq, WORD_SIZE)
+                output_logits = output_logits.transpose(0,1)
+                print("output_logits", output_logits.shape)
+                # Choose the most likely word ID from the vocabulary.
+                word = torch.argmax(output_logits, axis=2)
+                print("word", word.shape, word)
+                word = word[last_word_indices[:,0], last_word_indices[:, 1]]
+                
+                print("after word", word.shape, word)
+                # (k, seq)
+                qa = x["qa"]
+                # (k, seq) -> (k, seq+1)
+                new_qa = torch.cat((qa, torch.zeros((qa.shape[0], 1), dtype=torch.int64)), dim = 1)
+                print("new_qa, 1", new_qa)
+                # put the predicted word at the indices
+                new_qa = new_qa.index_put(tuple(indices.t()), word) 
+                print("new_qa, 2", new_qa)
+                # move the indices by 1
+                next_indices = indices + torch.tensor([0, 1])
+                # put the "102", i.e. [SEP] after the predicted word
+                new_qa = new_qa.index_put(tuple(next_indices.t()),
+                                          102 * torch.ones(indices.shape[0], dtype=torch.int64))
+                print("new_qa",new_qa)
+                
+                # put the qa back.
+                x["qa"] = new_qa
+
+            return x
     
     
     

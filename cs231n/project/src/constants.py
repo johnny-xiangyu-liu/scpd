@@ -11,6 +11,7 @@ VQA_OPEN_ENDED_ANSWER_TRAIN =VQA.joinpath('v2_mscoco_train2017_annotations.json'
 VQA_OPEN_ENDED_QUESTION_VAL =VQA.joinpath('v2_OpenEnded_mscoco_val2017_questions.json')
 VQA_OPEN_ENDED_ANSWER_VAL =VQA.joinpath('v2_mscoco_val2017_annotations.json')
 
+VQA_OPEN_ENDED_QUESTION_TEST =VQA.joinpath('v2_OpenEnded_mscoco_test-dev2017_questions.json')
 
 
 COCO_PATH = Path("/Users/xiangyuliu/sources/fiftyone_dataset_zoo/coco-2017")

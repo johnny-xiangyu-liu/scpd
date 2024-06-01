@@ -21,6 +21,7 @@ import fiftyone.utils.coco as fouc
 from PIL import Image
 import json 
 import pandas as pd
+import time
 
 def load(file_path:str, key:str, columns: list[str] = None):
     with open(file_path, 'r') as f:
@@ -34,6 +35,13 @@ def answer_to(answers_pd, question_id: int):
 def max_len(column):
     return column.str.len().max()
 
+def annotate_qa(q, a):
+    result = constants.QUESTION_TOKEN + ' ' + q.lower() + ' ' + constants.ANSWER_TOKEN 
+    if a is not None:
+        # should randomize some empty tokens in after the constants.ANSWER_TOKEN 
+        result += ' ' + a.lower() + ' ' + constants.END_TOKEN  
+    return result
+    
 class Coco(VisionDataset):
     
     def __init__(
@@ -54,17 +62,19 @@ class Coco(VisionDataset):
             self.captions = load(constants.CAPTION_TRAIN, key = "annotations", columns= ['image_id', 'caption'])
             self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_TRAIN, key = "questions")
             self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_TRAIN, key = "annotations",
-                                columns= ['image_id', 'multiple_choice_answer', 'question_id', 'answer_type', 'question_type'])
-        elif dataset_type == "val":
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id'])
+        elif dataset_type == "validation":
             # don't need to load validation captions
-#            self.captions = load(constants.CAPTION_VAL, key = "annotations", columns= ['image_id', 'caption'])
+            self.captions = None
             self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_VAL, key = "questions")
             self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_VAL, key = "annotations",
-                                columns= ['image_id', 'multiple_choice_answer', 'question_id', 'answer_type', 'question_type'])
-        else:
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id'])
+        elif dataset_type == "test":
             self.captions = None
-            self.questions = None
+            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_TEST, key = "questions")
             self.answers = None
+        else:
+            raise Exception(f"Unknown type {dataset_type}")
         
         
         
@@ -74,6 +84,8 @@ class Coco(VisionDataset):
         return annotations.loc[annotations['image_id'] == image_id]
 
     def __getitem__(self, idx):
+#        start_time = time.time()
+
         image_path = self.image_paths[idx]
         image = Image.open(image_path).convert("RGB")
         image_id = int(os.path.basename(image_path).removesuffix('.jpg'))
@@ -82,9 +94,9 @@ class Coco(VisionDataset):
             image, _ = self.transforms(image, None)
 
         annotations = {}
-        captions = self.get(self.captions, image_id)
-        questions  = self.get(self.questions, image_id)
-        answers = self.get(self.answers, image_id)
+        captions = None if self.captions is None else self.get(self.captions, image_id)
+        questions  = None if self.questions is None else self.get(self.questions, image_id)
+        answers = None if self.answers is None else self.get(self.answers, image_id)
         
         if captions is not None:
             annotations['captions'] = captions['caption'].tolist()
@@ -93,10 +105,13 @@ class Coco(VisionDataset):
             for index, row in questions.iterrows():
                 q_id = row['question_id']
                 q = row['question']
-                ans = answer_to(answers, q_id)
-                qa.append((q, ans))
+                ans = None if answers is None else answer_to(answers, q_id)
+                qa.append(annotate_qa(q, ans))
             annotations['qa'] = qa
-        return imagedata.ImageData(image_id, image_path, image, annotations)
+        result = imagedata.ImageData(image_id, image_path, image, annotations)
+#        print("---Loading ", idx , " took: %s seconds ---" % (time.time() - start_time))
+
+        return result
 
     def __len__(self):
         return len(self.image_paths)

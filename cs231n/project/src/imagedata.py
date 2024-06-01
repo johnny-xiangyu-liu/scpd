@@ -22,7 +22,9 @@ def scale_and_pad(image):
         HH =  math.ceil(IMAGE_SIZE / W * H)
         pad_h = IMAGE_SIZE - HH
     resized = T.Resize(size=(HH, WW))(image)
-    return T.Pad(padding=[0, 0, pad_w, pad_h])(resized)
+   
+    image_640_640 =  T.Pad(padding=[0, 0, pad_w, pad_h])(resized)
+    return T.Resize(size=(IMAGE_SIZE//2, IMAGE_SIZE//2))(image_640_640)  # shrink it to 320X320 to save space
 
 def to_dict(image_data):
     return  {
@@ -44,7 +46,7 @@ class ImageData():
         annotations,
     ):
         self.image_path = image_path
-        self.image = scale_and_pad(tv_tensors.Image(image))
+        self.image = None if image is None else scale_and_pad(tv_tensors.Image(image, requires_grad = False))
         self.annotations = annotations
         self.image_id = image_id
     
