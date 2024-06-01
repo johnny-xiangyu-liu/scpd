@@ -121,7 +121,7 @@ class VQANet(nn.Module):
         )
         
         decoder_layer = nn.TransformerDecoderLayer(d_model=text_embedding_size, nhead=4)
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=2)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=4)
         self.output = nn.Linear(text_embedding_size, len(tokenizer))
         
     def forward(self, x, device):
@@ -157,7 +157,7 @@ class VQANet(nn.Module):
 
         out_logits = None
         if qa_input_ids is not None:
-            print("qa_input_ids", qa_input_ids)
+#            print("qa_input_ids", qa_input_ids)
             qa_embed = self.embedding(input_ids = qa_input_ids)
 
             # (seq, batch, embedding)
@@ -205,27 +205,31 @@ class VQANet(nn.Module):
                 image_embedding_for_captions, captions_embedding, output_logits = self.forward(x, device)
                 # (seq, K, WORD_SIZE) - > (K, seq, WORD_SIZE)
                 output_logits = output_logits.transpose(0,1)
-                print("output_logits", output_logits.shape)
+#                print("output_logits", output_logits.shape, output_logits)
                 # Choose the most likely word ID from the vocabulary.
                 word = torch.argmax(output_logits, axis=2)
-                print("word", word.shape, word)
+                #print("word", word.shape, word)
                 word = word[last_word_indices[:,0], last_word_indices[:, 1]]
+                #print("after word", word.shape, word)
                 
-                print("after word", word.shape, word)
+                # if the predictions are either [SEP] or [PAD], terminate the loop
+                is_terminated = torch.all(torch.logical_or((word == 102), (word == 0))).item()
+                if is_terminated:
+                    break;
                 # (k, seq)
                 qa = x["qa"]
                 # (k, seq) -> (k, seq+1)
                 new_qa = torch.cat((qa, torch.zeros((qa.shape[0], 1), dtype=torch.int64)), dim = 1)
-                print("new_qa, 1", new_qa)
+#                print("new_qa, 1", new_qa)
                 # put the predicted word at the indices
                 new_qa = new_qa.index_put(tuple(indices.t()), word) 
-                print("new_qa, 2", new_qa)
+#                print("new_qa, 2", new_qa)
                 # move the indices by 1
                 next_indices = indices + torch.tensor([0, 1])
                 # put the "102", i.e. [SEP] after the predicted word
                 new_qa = new_qa.index_put(tuple(next_indices.t()),
                                           102 * torch.ones(indices.shape[0], dtype=torch.int64))
-                print("new_qa",new_qa)
+#                print("new_qa",new_qa)
                 
                 # put the qa back.
                 x["qa"] = new_qa

@@ -61,4 +61,9 @@ class ImageData():
     def qa(self):
         if "qa" not in self.annotations:
             return None
-        return self.annotations["qa"]        
+        return self.annotations["qa"]     
+    
+    def qids(self):
+        if "qa" not in self.annotations:
+            return None
+        return self.annotations["q_id"]     

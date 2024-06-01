@@ -102,12 +102,18 @@ class Coco(VisionDataset):
             annotations['captions'] = captions['caption'].tolist()
         if questions is not None:
             qa = []
+            qs = []
+            q_ids = []
             for index, row in questions.iterrows():
                 q_id = row['question_id']
                 q = row['question']
                 ans = None if answers is None else answer_to(answers, q_id)
                 qa.append(annotate_qa(q, ans))
+                qs.append(annotate_qa(q, None))
+                q_ids.append(q_id)
             annotations['qa'] = qa
+            annotations['q_id'] = q_ids
+            annotations['qs'] = qs
         result = imagedata.ImageData(image_id, image_path, image, annotations)
 #        print("---Loading ", idx , " took: %s seconds ---" % (time.time() - start_time))
 
