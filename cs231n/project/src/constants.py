@@ -2,6 +2,10 @@ from pathlib import Path
 
 SOURCE_DIR=Path(__file__).parent
 DATA_PATH=SOURCE_DIR.parent.joinpath('data')
+OUTPUT_PATH=SOURCE_DIR.parent.joinpath('output')
+
+TB_OUT_PATH=OUTPUT_PATH.joinpath('runs') # tensorboard output
+MODEL_OUT_PATH=OUTPUT_PATH.joinpath('model') # to store model params
 
 VQA = DATA_PATH.joinpath('vqa')
 

@@ -14,6 +14,7 @@ from transformers import AutoTokenizer, BertModel
 #from transformers.models.bert import BertEmbeddings
 
 import constants
+import imagedata
 from itertools import chain
 
 # # from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
@@ -102,6 +103,13 @@ def flatten(results):
 def blow_to(images, replicas):
     return images[replicas]
 
+def path_to_image(paths, device):
+    result = []
+    for p in paths:
+        result.append(imagedata.get_image(p, device))
+    image = torch.stack(result, dim = 0).to(device)
+#    print("image shape", image.shape)
+    return image
     
 
 class VQANet(nn.Module):
@@ -135,7 +143,9 @@ class VQANet(nn.Module):
         """
         
         ids = x['image_ids']
-        images = torch.stack(x['images'], dim = 0).to(device)
+#        images = torch.stack(x['images'], dim = 0).to(device)
+#        print("image paths", x['image_paths'])
+        images = path_to_image(x['image_paths'], device)
         cap_tokens = x['captions']
         qa_input_ids = x['qa']
         c2i = x['c2i']
@@ -200,7 +210,7 @@ class VQANet(nn.Module):
                 indices = (x["qa"] == 102).nonzero() # 102 is the [SEP] token in bert.
                 last_word_indices = indices -torch.tensor([0, 1]) # get the token right before 102
 
-                print("indices", indices)
+#                print("indices", indices)
                 # Predict the next token (ignoring all other time steps).
                 image_embedding_for_captions, captions_embedding, output_logits = self.forward(x, device)
                 # (seq, K, WORD_SIZE) - > (K, seq, WORD_SIZE)

@@ -36,22 +36,24 @@ def to_dict(image_data):
 
 def to_image_data(dictionary):
     return ImageData(**dictionary)
-    
+   
+def get_image(path, device):
+    image = Image.open(path).convert("RGB")
+    return scale_and_pad(tv_tensors.Image(image, requires_grad = False).to(device))
+
 class ImageData():
     def __init__(
         self,
         image_id: int,
         image_path: str,
-        image,
         annotations,
     ):
         self.image_path = image_path
-        self.image = None if image is None else scale_and_pad(tv_tensors.Image(image, requires_grad = False))
         self.annotations = annotations
         self.image_id = image_id
     
-    def image_tensor(self):
-        return self.image
+    def image_tensor(self, device):
+        return get_image(self.image_path, device)
     
     def captions(self):
         if "captions" not in self.annotations:

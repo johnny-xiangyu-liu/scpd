@@ -87,7 +87,6 @@ class Coco(VisionDataset):
 #        start_time = time.time()
 
         image_path = self.image_paths[idx]
-        image = Image.open(image_path).convert("RGB")
         image_id = int(os.path.basename(image_path).removesuffix('.jpg'))
 
         if self.transforms is not None:
@@ -114,7 +113,7 @@ class Coco(VisionDataset):
             annotations['qa'] = qa
             annotations['q_id'] = q_ids
             annotations['qs'] = qs
-        result = imagedata.ImageData(image_id, image_path, image, annotations)
+        result = imagedata.ImageData(image_id, image_path, annotations)
 #        print("---Loading ", idx , " took: %s seconds ---" % (time.time() - start_time))
 
         return result
