@@ -141,17 +141,22 @@ class VQANet(nn.Module):
                          seq: the padded sequence length output by the tokenizer
                          WORD_SIZE: all the worlds that the tokenizer knows about (constant). (~30k)
         """
-        
+        assert device == 'mps'
         ids = x['image_ids']
 #        images = torch.stack(x['images'], dim = 0).to(device)
 #        print("image paths", x['image_paths'])
-        images = path_to_image(x['image_paths'], device)
         cap_tokens = x['captions']
         qa_input_ids = x['qa']
         c2i = x['c2i']
         qa2i = x['qa2i']
+        
+        # No questions or captions, return immediately.
+        if cap_tokens is None and qa_input_ids is None:
+            return None, None, None
+        
+        images = path_to_image(x['image_paths'], device)
         N = images.shape[0]
-
+        
         feature_map = self.image_backbone(images)
         #print("feature_map", feature_map.keys())
         image_embedding = self.get_image_embed(feature_map)
@@ -205,10 +210,10 @@ class VQANet(nn.Module):
         """
         with torch.no_grad():
             for t in range(max_length):
-                print(f">>>>>{t}")
-                print(x)
+ #               print(f">>>>>{t}")
+#                print(x)
                 indices = (x["qa"] == 102).nonzero() # 102 is the [SEP] token in bert.
-                last_word_indices = indices -torch.tensor([0, 1]) # get the token right before 102
+                last_word_indices = indices -torch.tensor([0, 1]).to(device) # get the token right before 102
 
 #                print("indices", indices)
                 # Predict the next token (ignoring all other time steps).
@@ -229,16 +234,20 @@ class VQANet(nn.Module):
                 # (k, seq)
                 qa = x["qa"]
                 # (k, seq) -> (k, seq+1)
-                new_qa = torch.cat((qa, torch.zeros((qa.shape[0], 1), dtype=torch.int64)), dim = 1)
+                new_qa = torch.cat((qa,
+                                    torch.zeros((qa.shape[0], 1), dtype=torch.int64).to(device)),
+                                    dim = 1)
 #                print("new_qa, 1", new_qa)
                 # put the predicted word at the indices
                 new_qa = new_qa.index_put(tuple(indices.t()), word) 
 #                print("new_qa, 2", new_qa)
                 # move the indices by 1
-                next_indices = indices + torch.tensor([0, 1])
+                next_indices = indices + torch.tensor([0, 1]).to(device)
                 # put the "102", i.e. [SEP] after the predicted word
                 new_qa = new_qa.index_put(tuple(next_indices.t()),
-                                          102 * torch.ones(indices.shape[0], dtype=torch.int64))
+                                          102 * torch.ones(indices.shape[0],
+                                                           dtype=torch.int64).to(device)
+                                         )
 #                print("new_qa",new_qa)
                 
                 # put the qa back.
