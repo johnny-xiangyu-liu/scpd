@@ -36,8 +36,13 @@ def train(model, data_loader, train_optimizer, epoch, epochs, batch_size=32, tem
         # Run x_i and x_j through the model to get out_left, out_right.              #
         # Then compute the loss using simclr_loss_vectorized.                        #
         ##############################################################################
-        
-        
+        x = torch.cat((x_i, x_j), dim = 0)
+        feature,out= model(x)
+        N = out.shape[0] // 2
+#        print(out.shape)
+        out_left, out_right = torch.split(out, N)
+#        print(out_left.shape, out_right.shape)
+        loss = simclr_loss_vectorized(out_left, out_right, temperature, device = "mps")
         ##############################################################################
         #                               END OF YOUR CODE                             #
         ##############################################################################

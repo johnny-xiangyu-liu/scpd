@@ -260,7 +260,7 @@ def build_dc_generator(noise_dim=NOISE_DIM):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     return nn.Sequential(
-        nn.Linear(96, 1024),
+        nn.Linear(noise_dim, 1024),
         nn.ReLU(),
         nn.BatchNorm1d(1024),
         nn.Linear(1024, 7*7*128),

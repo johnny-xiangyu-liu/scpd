@@ -349,9 +349,18 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     # You may want to use the numerically stable sigmoid implementation above.  #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    N, D = x.shape
+    a = x.dot(Wx) + prev_h.dot(Wh) + b
+    H = a.shape[1] / 4
+    ai, af, ao, ag = np.split(a, 4, axis = 1)
+    i, f, o, g  = sigmoid(ai), sigmoid(af), sigmoid(ao), np.tanh(ag)
+    c = np.multiply(f, prev_c) + np.multiply(i, g)
+    tanhc = np.tanh(c)
+    h = np.multiply(o, tanhc) 
 
-    pass
-
+    next_h = h
+    next_c = c
+    cache = (i, f, o, g, c, tanhc, h, x, prev_h, prev_c, Wx, Wh, b)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
     #                               END OF YOUR CODE                             #
@@ -384,9 +393,30 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     # the output value from the nonlinearity.                                   #
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    (i, f, o, g, c, tanhc, h, x, prev_h, prev_c, Wx, Wh, b) = cache
 
-    pass
+    d_o = np.multiply(dnext_h, tanhc)
+    d_tanh = np.multiply(dnext_h, o)
 
+    dc = dnext_c + d_tanh * (1 - tanhc ** 2)
+    df = np.multiply(dc, prev_c)
+    dprev_c = np.multiply(dc, f)
+    di = np.multiply(dc, g)
+    dg = np.multiply(dc, i)
+
+    dai = di * i * (1-i)
+    daf = df * f * (1 -f)
+    dao = d_o * o * (1-o)
+    dag = dg * ( 1 - g**2)
+    
+    da = np.concatenate((dai, daf, dao, dag), axis = 1)
+
+    dx = da.dot(Wx.T)
+    dWx = x.T.dot(da)
+    dprev_h = da.dot(Wh.T)
+    dWh = prev_h.T.dot(da)
+    db = np.sum(da, axis = 0)
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
     #                               END OF YOUR CODE                             #
@@ -424,7 +454,27 @@ def lstm_forward(x, h0, Wx, Wh, b):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, T, D = x.shape
+    N, H = h0.shape
+    # (T, N, D)
+    x = x.swapaxes(0, 1)
+#    print("x", x.shape)
+    
+    h = np.zeros((T, N, H))
+    cache_list = []
+    prev_h = h0
+    prev_c = np.zeros((N, H))
+    for idx in range(x.shape[0]):
+        xi = x[idx]
+        new_h, next_c, cache  = lstm_step_forward(xi, prev_h, prev_c, Wx, Wh, b)
+        h[idx] = new_h
+        prev_h = new_h
+        prev_c = next_c
+        cache_list.append(cache)
+
+    h = h.swapaxes(0, 1)
+    x = x.swapaxes(0, 1)
+    cache = (x, h0, Wx, Wh, b, h, prev_c,  cache_list)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -455,7 +505,34 @@ def lstm_backward(dh, cache):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    (x, h0, Wx, Wh, b, h, prev_c,  cache_list) = cache
+    T = len(cache_list)
+    N, T, D = x.shape
+    N, H = h0.shape
+    dx = np.zeros((T, N, D))
+
+    dWx = np.zeros((D, 4* H))
+    dWh = np.zeros((H, 4* H))
+    db = np.zeros(4* H)
+#    print("dh", dh.shape)
+    dh = dh.swapaxes(0, 1)
+    dnext_c = np.zeros_like(prev_c)
+    dnext_h = dh[T - 1]
+    for idx in range(T -1 , -1, -1):
+        if idx != T - 1:
+            dnext_h += dh[idx]
+        cache_i = cache_list.pop()
+        dx[idx], dprev_hi, dprev_ci, dWxi, dWhi, dbi = lstm_step_backward(dnext_h, dnext_c, cache_i)
+        dnext_h = dprev_hi
+        dnext_c = dprev_ci
+        dWx += dWxi
+        dWh += dWhi
+        db += dbi
+
+    assert len(cache_list) == 0
+    dx = dx.swapaxes(0, 1)
+    dh0 = dnext_h
+
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
