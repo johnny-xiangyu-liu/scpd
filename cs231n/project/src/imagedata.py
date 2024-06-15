@@ -30,7 +30,6 @@ def to_dict(image_data):
     return  {
         'image_id': image_data.image_id,
         'image_path': image_data.image_path,
-        'image': image_data.image,
         'annotations': image_data.annotations
     }
 

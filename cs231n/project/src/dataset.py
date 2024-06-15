@@ -47,15 +47,16 @@ class Coco(VisionDataset):
     def __init__(
         self,
         dataset_type: str = "train", # or "validation" or "test"
+        use_standard = False,
         classes=None,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         transforms: Optional[Callable] = None,
     ) -> None:
         super().__init__(root=None, transforms = transforms, transform = transform, target_transform = target_transform)
-        self.dataset = foz.load_zoo_dataset("coco-2017", split = dataset_type)
-        self.dataset.persistent = True
-        self.image_paths = self.dataset.values("filepath")
+        dataset = foz.load_zoo_dataset("coco-2017", split = dataset_type)
+        dataset.persistent = True
+        self.image_paths = dataset.values("filepath")
 
         
         if dataset_type == "train":
@@ -71,7 +72,10 @@ class Coco(VisionDataset):
                                 columns= ['image_id', 'multiple_choice_answer', 'question_id'])
         elif dataset_type == "test":
             self.captions = None
-            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_TEST, key = "questions")
+            if use_standard:
+                self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_STANDARD_TEST, key = "questions")
+            else:
+                self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_DEV_TEST, key = "questions")
             self.answers = None
         else:
             raise Exception(f"Unknown type {dataset_type}")
@@ -87,6 +91,9 @@ class Coco(VisionDataset):
 #        start_time = time.time()
 
         image_path = self.image_paths[idx]
+        return self.get_item_from_path(image_path)
+
+    def get_item_from_path(self, image_path):
         image_id = int(os.path.basename(image_path).removesuffix('.jpg'))
 
         if self.transforms is not None:
@@ -102,21 +109,121 @@ class Coco(VisionDataset):
         if questions is not None:
             qa = []
             qs = []
+            raw_anses = []
+            raw_qs = []
             q_ids = []
             for index, row in questions.iterrows():
                 q_id = row['question_id']
                 q = row['question']
                 ans = None if answers is None else answer_to(answers, q_id)
+                raw_qs.append(q)
+                raw_anses.append(ans)
                 qa.append(annotate_qa(q, ans))
                 qs.append(annotate_qa(q, None))
                 q_ids.append(q_id)
             annotations['qa'] = qa
             annotations['q_id'] = q_ids
             annotations['qs'] = qs
+            annotations['raw_anses'] = raw_anses
+            annotations['raw_qs'] = raw_qs
         result = imagedata.ImageData(image_id, image_path, annotations)
 #        print("---Loading ", idx , " took: %s seconds ---" % (time.time() - start_time))
 
         return result
+        
+
+    def __len__(self):
+        return len(self.image_paths)
+    
+
+class VqaCoco(VisionDataset):
+    
+    def __init__(
+        self,
+        dataset_type: str = "test",
+        use_standard = False,
+        classes=None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        transforms: Optional[Callable] = None,
+    ) -> None:
+        super().__init__(root=None, transforms = transforms, transform = transform, target_transform = target_transform)
+        
+        self.image_paths = os.listdir(constants.VQA_COCO_TEST)
+        print("paths", len(self.image_paths))
+        
+        if dataset_type == "train":
+            self.captions = load(constants.CAPTION_TRAIN, key = "annotations", columns= ['image_id', 'caption'])
+            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_TRAIN, key = "questions")
+            self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_TRAIN, key = "annotations",
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id'])
+        elif dataset_type == "validation":
+            # don't need to load validation captions
+            self.captions = None
+            self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_VAL, key = "questions")
+            self.answers = load(constants.VQA_OPEN_ENDED_ANSWER_VAL, key = "annotations",
+                                columns= ['image_id', 'multiple_choice_answer', 'question_id'])
+        elif dataset_type == "test":
+            self.captions = None
+            if use_standard:
+                self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_STANDARD_TEST, key = "questions")
+            else:
+                self.questions = load(constants.VQA_OPEN_ENDED_QUESTION_DEV_TEST, key = "questions")
+            self.answers = None
+        else:
+            raise Exception(f"Unknown type {dataset_type}")
+        
+        
+        
+    def get(self, annotations, image_id):
+        if annotations is None:
+            return None
+        return annotations.loc[annotations['image_id'] == image_id]
+
+    def __getitem__(self, idx):
+#        start_time = time.time()
+
+        image_path = self.image_paths[idx]
+        return self.get_item_from_path(image_path)
+
+    def get_item_from_path(self, image_path):
+        image_id = int(os.path.basename(image_path).removesuffix('.jpg').removeprefix('COCO_test2015_'))
+
+        if self.transforms is not None:
+            image, _ = self.transforms(image, None)
+
+        annotations = {}
+        captions = None if self.captions is None else self.get(self.captions, image_id)
+        questions  = None if self.questions is None else self.get(self.questions, image_id)
+        answers = None if self.answers is None else self.get(self.answers, image_id)
+        
+        if captions is not None:
+            annotations['captions'] = captions['caption'].tolist()
+        if questions is not None:
+            qa = []
+            qs = []
+            raw_anses = []
+            raw_qs = []
+            q_ids = []
+            for index, row in questions.iterrows():
+                q_id = row['question_id']
+                q = row['question']
+                ans = None if answers is None else answer_to(answers, q_id)
+                raw_qs.append(q)
+                raw_anses.append(ans)
+                qa.append(annotate_qa(q, ans))
+                qs.append(annotate_qa(q, None))
+                q_ids.append(q_id)
+            annotations['qa'] = qa
+            annotations['q_id'] = q_ids
+            annotations['qs'] = qs
+            annotations['raw_anses'] = raw_anses
+            annotations['raw_qs'] = raw_qs
+        result = imagedata.ImageData(image_id, image_path, annotations)
+#        print("---Loading ", idx , " took: %s seconds ---" % (time.time() - start_time))
+
+        return result
+        
 
     def __len__(self):
         return len(self.image_paths)

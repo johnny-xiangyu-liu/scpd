@@ -1,0 +1,8 @@
+Notes:
+
+
+vqa_epoch-1-batch-949-stats: full training with 0 init.
+runs/vqa_with_caption_Jun02_17-27-12: training with normal weight initialization and with QA loss, caption loss and time per batch step
+models/train-vqa_with_caption_Jun02_17-27-12-epoch-0-batch-1949: training with normal weight initialization and with QA loss, caption loss and time per batch step
+
+

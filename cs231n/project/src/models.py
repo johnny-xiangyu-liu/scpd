@@ -18,26 +18,26 @@ import imagedata
 from itertools import chain
 
 # # from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-# class PositionalEncoding(nn.Module):
+class PositionalEncoding(nn.Module):
 
-#     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-#         super().__init__()
-#         self.dropout = nn.Dropout(p=dropout)
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
-#         position = torch.arange(max_len).unsqueeze(1)
-#         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-#         pe = torch.zeros(max_len, 1, d_model)
-#         pe[:, 0, 0::2] = torch.sin(position * div_term)
-#         pe[:, 0, 1::2] = torch.cos(position * div_term)
-#         self.register_buffer('pe', pe)
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
-#     def forward(self, x):
-#         """
-#         Arguments:
-#             x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
-#         """
-#         x = x + self.pe[:x.size(0)]
-#         return self.dropout(x)
+    def forward(self, x):
+        """
+        Arguments:
+            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
 
 class TextEncoder(nn.Module):
     
@@ -113,8 +113,9 @@ def path_to_image(paths, device):
     
 
 class VQANet(nn.Module):
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, use_captions):
         super().__init__()
+        self.use_captions = use_captions
         self.image_backbone = MaskRNNBackbone()
         self.text_encoder = TextEncoder(tokenizer)
         self.embedding = self.text_encoder.model.embeddings
@@ -127,11 +128,24 @@ class VQANet(nn.Module):
             nn.Linear(hidden_size, text_embedding_size),
             nn.LeakyReLU()
         )
-        
+        self.pos_encoder = PositionalEncoding(d_model=text_embedding_size)
         decoder_layer = nn.TransformerDecoderLayer(d_model=text_embedding_size, nhead=4)
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=4)
         self.output = nn.Linear(text_embedding_size, len(tokenizer))
-        
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """
+        Initialize the weights of the network.
+        """
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
     def forward(self, x, device):
         """
         returns:
@@ -163,7 +177,7 @@ class VQANet(nn.Module):
         
         captions_embedding = None
         image_embedding_for_captions = None
-        if cap_tokens is not None:
+        if cap_tokens is not None and self.use_captions:
             captions_embedding = self.text_encoder(cap_tokens)
 #            print("captions_embedding", captions_embedding.shape)
             image_embedding_for_captions = blow_to(image_embedding, c2i)
@@ -174,6 +188,7 @@ class VQANet(nn.Module):
         if qa_input_ids is not None:
 #            print("qa_input_ids", qa_input_ids)
             qa_embed = self.embedding(input_ids = qa_input_ids)
+            qa_embed += self.pos_encoder(qa_embed)
 
             # (seq, batch, embedding)
             qa_embed = qa_embed.transpose(0,1)
